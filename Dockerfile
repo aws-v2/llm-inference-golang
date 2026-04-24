@@ -10,11 +10,12 @@ RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build application
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o go-layer ./cmd/gateway
+
+
 
 
 # Final stage
