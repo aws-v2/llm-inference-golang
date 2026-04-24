@@ -5,7 +5,7 @@ set -e
 echo "Running database migrats"
 
 migrate -path ./internal/migrations \
-  -database "postgres://postgres-staging-user:postgres-staging-password@localhost:5432/llm_db?sslmode=disable" up
+  -database "postgres://postgres-staging-user:postgres-staging-password@postgres-staging:5432/llm_db?sslmode=disable" up
 
 echo "Starting application..."
 
