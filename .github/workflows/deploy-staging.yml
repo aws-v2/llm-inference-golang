@@ -77,7 +77,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create PR staging → main
+      - name: Create PR staging → main...
         run: |
           if gh pr list --base main --head staging --state open --json number | jq -e 'length > 0' > /dev/null; then
             echo "PR already exists. Skipping..."
