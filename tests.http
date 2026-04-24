@@ -1,0 +1,44 @@
+@baseUrl = http://localhost:8891
+@token = Bearer eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjoiVVNFUiIsInVzZXJJZCI6ImY4MzNlYzBkLTU3NTItNGMyMC04OTc4LWRlNTM4N2M0NDlkMCIsInN1YiI6ImVtcWFyYW5pQGdtYWlsLmNvbTkwIiwiaWF0IjoxNzc2OTI1MDc0LCJleHAiOjE3NzcwMTE0NzR9.RSDI4xmejCQ5eiOiojYCtf70dXH0dnwpYVTygzKA7s7xB4sZSVZImCS-r-8ZWBXYqIG1DdC4XxRGaEbdItZ4Ow
+
+### 1. Register a new model
+# @name registerModel
+POST {{baseUrl}}/api/v1/llm/models/register
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+    "name": "my-first-model"
+}
+
+###
+
+@modelId = {{registerModel.response.body.model_id}}
+
+### 2. Get all models for the user
+GET {{baseUrl}}/api/v1/llm/models/
+Authorization: {{token}}
+
+### 3. Get specific model details
+GET {{baseUrl}}/api/v1/llm/models/{{modelId}}
+Authorization: {{token}}
+
+### 4. Update model config
+PUT {{baseUrl}}/api/v1/llm/models/{{modelId}}/config
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+    "temperature": 0.7,
+    "max_tokens": 2048
+}
+
+### 5. Infer from model
+POST {{baseUrl}}/api/v1/llm/models/infer
+Authorization: {{token}}
+Content-Type: application/json
+X-Model-ID: {{modelId}}
+
+{
+    "prompt": "Hello, how are you?"
+}
