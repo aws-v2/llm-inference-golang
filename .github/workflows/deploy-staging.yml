@@ -62,7 +62,7 @@ jobs:
               -e DB_PASSWORD=postgres-staging-password \
               -e DB_NAME=llm_db \
               -e NATS_URL=nats://nats-staging:4222 \
-              -e NATS_USERNAME=nats-staging-user \
+              -e NATS_USER=nats-staging-user \
               -e NATS_PASSWORD=nats-staging-password \
               -e EUREKA_SERVER_URL=http://discovery-server-staging:8761/eureka \
               -e PUBLIC_HOST_IP=192.168.1.7 \
