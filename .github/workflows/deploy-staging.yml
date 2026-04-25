@@ -49,25 +49,34 @@ jobs:
             docker stop llm-inference-service-go-staging || true
             docker rm llm-inference-service-go-staging || true
             docker run -d --name llm-inference-service-go-staging \
-              --network aws-staging-network \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -p 8891:8891 \
-              -e APP_PROFILE=staging \
-              -e EUREKA_HOSTNAME=llm-inference-service-staging \
-              -e EUREKA_IP_ADDR=127.0.0.1 \
-              -e RDS_PORT=8891 \
-              -e DB_HOST=postgres-staging \
-              -e DB_PORT=5432 \
-              -e DB_USER=postgres-staging-user \
-              -e DB_PASSWORD=postgres-staging-password \
-              -e DB_NAME=llm_db \
-              -e NATS_URL=nats://nats-staging:4222 \
-              -e NATS_USER=nats-staging-user \
-              -e NATS_PASSWORD=nats-staging-password \
-              -e EUREKA_SERVER_URL=http://discovery-server-staging:8761/eureka \
-              -e PUBLIC_HOST_IP=192.168.1.7 \
-              -e AWS_REGION=eu-north-1 \
-              qarani/llm-inference-service-go:staging
+            --network aws-staging-network \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -p 8891:8891 \
+            -e APP_ENV=staging \
+            -e APP_PROFILE=staging \
+            -e SERVER_PORT=:8891 \
+            -e SERVICE_PORT=8891 \
+            -e SERVICE_NAME=llm-gateway \
+            -e EUREKA_APP_NAME=llm-gateway \
+            -e EUREKA_VIP_ADDRESS=llm-gateway \
+            -e EUREKA_HOSTNAME=llm-gateway-staging \
+            -e EUREKA_IP_ADDR=llm-gateway-staging \
+            -e EUREKA_INSTANCE_ID=llm-gateway-staging:8891 \
+            -e EUREKA_SERVER_URL=http://discovery-server-staging:8761/eureka \
+            -e NATS_URL=nats://nats-staging:4222 \
+            -e NATS_USER=nats-staging-user \
+            -e NATS_PASSWORD=nats-staging-password \
+            -e NATS_PREFIX=staging.v1 \
+            -e DB_HOST=postgres-staging \
+            -e DB_PORT=5432 \
+            -e DB_USER=postgres-staging-user \
+            -e DB_PASSWORD=postgres-staging-password \
+            -e DB_NAME=llm_db \
+            \
+            -e DOCS_PATH=/app/docs \
+            -e AWS_REGION=eu-north-1 \
+            \
+            qarani/llm-inference-service-go:staging
 
   open-pr-to-main:
     needs: deploy
