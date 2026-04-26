@@ -61,7 +61,7 @@ func Load() *Config {
 			Port:     getEnv("DB_PORT", "5432"),
 			User:     getEnv("DB_USER", "root"),
 			Password: getEnv("DB_PASSWORD", "root"),
-			Name:     getEnv("DB_NAME", "sagemaker_inference_db"),
+			Name:     getEnv("DB_NAME", "llm_db"),
 		},
 	}
 

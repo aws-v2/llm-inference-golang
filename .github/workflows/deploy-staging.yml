@@ -52,7 +52,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: qarani/billing-service:staging
+        tags: qarani/llm-gateway:staging
 
   staging-deploy:
     needs: staging-build-image
@@ -75,9 +75,9 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             docker network create aws-staging-network || true
-            docker pull qarani/llm-inference-service-go:staging
-            docker stop llm-inference-service-staging || true
-            docker rm llm-inference-service-staging || true
+            docker pull qarani/llm-gateway:staging
+            docker stop llm-gateway-staging || true
+            docker rm llm-gateway-staging || true
             docker run -d --name llm-gateway-staging \
             --network aws-staging-network \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -103,7 +103,7 @@ jobs:
             -e DB_NAME=llm_db \
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
-            qarani/llm-inference-service-go:staging
+            qarani/llm-gateway:staging
 
   staging-open-pr-to-main:
     needs: staging-deploy
