@@ -1,4 +1,4 @@
-name: Staging Deployment Pipeline
+name: Staging Deployment 
 
 on:
   push:
