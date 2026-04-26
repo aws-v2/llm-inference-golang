@@ -77,22 +77,26 @@ jobs:
               --network aws-prod-network \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -p 8805:8805 \
-              -e APP_PROFILE=STAGING \
-              -e EUREKA_HOSTNAME=rds-server-prod \
+              -e APP_PROFILE=prod \
+              -e EUREKA_HOSTNAME=llm-gateway-prod \
               -e EUREKA_IP_ADDR=127.0.0.1 \
-              -e RDS_PORT=8805 \
+              -e SERVICE_PORT=8891 \
+              -e SERVER_PORT=8891 \
+              -e NATS_PREFIX=prod.v1 \
+              -e DOCS_PATH=/app/docs \
               -e DB_HOST=postgres-prod \
               -e DB_PORT=5432 \
               -e DB_USER=postgres-prod-user \
               -e DB_PASSWORD=postgres-prod-password \
-              -e DB_NAME=rds_db \
+              -e DB_NAME=llm_db \
+
               -e NATS_URL=nats://nats-prod:4222 \
               -e NATS_USERNAME=nats-prod-user \
               -e NATS_PASSWORD=nats-prod-password \
               -e EUREKA_SERVER_URL=http://discovery-server-prod:8761/eureka \
               -e PUBLIC_HOST_IP=192.168.1.7 \
               -e AWS_REGION=eu-north-1 \
-              qarani/rds-server:prod
+              qarani/llm-gateway:prod
 
 
 

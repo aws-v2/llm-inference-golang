@@ -103,7 +103,7 @@ jobs:
             -e DB_NAME=llm_db \
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
-            qarani/llm-inference-service-go:staging
+            qarani/llm-gateway:staging
 
   staging-open-pr-to-main:
     needs: staging-deploy
