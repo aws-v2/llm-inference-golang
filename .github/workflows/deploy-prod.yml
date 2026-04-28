@@ -97,7 +97,6 @@ jobs:
               -e DB_USER=postgres-prod-user \
               -e DB_PASSWORD=postgres-prod-password \
               -e DB_NAME=llm_db \
-
               -e NATS_URL=nats://nats-prod:4222 \
               -e NATS_USERNAME=nats-prod-user \
               -e NATS_PASSWORD=nats-prod-password \
