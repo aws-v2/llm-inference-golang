@@ -61,14 +61,20 @@ jobs:
     needs: prod-build
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy to EC2 via SSH
+      - uses: actions/checkout@v4
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Deploy to Staging via SSH over Tailscale.
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USERNAME }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             docker network create aws-prod-network || true
             docker pull qarani/llm-gateway:prod
