@@ -78,10 +78,10 @@ jobs:
           script: |
             docker network create aws-prod-network || true
             docker pull qarani/llm-gateway:prod
-            docker stop llm-gateway-prod || true
-            docker rm llm-gateway-prod || true
+            docker stop llm-gateway || true
+            docker rm llm-gateway || true
             docker run -d \
-              --name llm-gateway-prod \
+              --name llm-gateway \
               --network aws-prod-network \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -p 8805:8805 \
