@@ -35,11 +35,7 @@ COPY --from=builder /app/go-layer .
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/internal/migrations ./internal/migrations
 
-# Copy entrypoint script
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
 EXPOSE 8087
 
 # Run migrations + start app
-CMD ["./entrypoint.sh"]
+CMD migrate -path ./internal/migrations -database "postgres://postgres-prod-user:postgres-prod-password@postgres-prod:5432/llm_db?sslmode=disable" up && ./go-layer
