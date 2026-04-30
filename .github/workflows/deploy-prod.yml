@@ -78,9 +78,9 @@ jobs:
           script: |
             docker network create --attachable --driver overlay aws-prod-network || true
             docker pull qarani/llm-gateway:prod
-            docker service rm llm-gateway || true
+            docker service rm llm-gateway-prod || true
             docker service create \
-            --name llm-gateway \
+            --name llm-gateway-prod \
             --network aws-prod-network \
             --publish published=8805,target=8805 \
             --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
