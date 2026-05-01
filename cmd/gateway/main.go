@@ -20,14 +20,14 @@ import (
 
 func main() {
 	cfg := config.Load()
-// Initialize logger FIRST
-logger.Init(
-	cfg.ServiceName,  // or hardcode if you don’t have it yet
-	cfg.Profile,
-	cfg.Region,
-)
+	// Initialize logger FIRST
+	logger.Init(
+		cfg.ServiceName, // or hardcode if you don’t have it yet
+		cfg.Profile,
+		cfg.Region,
+	)
 
-defer logger.Log.Sync()
+	defer logger.Log.Sync()
 	// DB
 	database := db.NewPostgres(cfg.DB)
 
@@ -62,77 +62,66 @@ defer logger.Log.Sync()
 	modelHandler := handler.NewModelHandler(modelService, nc)
 	trainingHandler := handler.NewTrainingHandler(trainingService)
 	docsHandlers := handler.NewDocsHandler(docsService)
-	
+
 	// Router
 	r := chi.NewRouter()
 	apiVersion := "/api/v1/llm"
 
+	r.Route(apiVersion+"/models", func(r chi.Router) {
+		// r.Use(middleware.Auth) // JWT middleware
+		r.Post("/register", modelHandler.RegisterModel)
 
+		r.Post("/infer", inferenceHandler.Infer)
 
-r.Route(apiVersion+"/models", func(r chi.Router) {
-    // r.Use(middleware.Auth) // JWT middleware
-	r.Post("/register", modelHandler.RegisterModel)
+		r.Get("/", modelHandler.GetMyModels)              // ✅ all models for user
+		r.Get("/{modelID}", modelHandler.GetModelDetails) // ✅ single model
 
-	r.Post("/infer", inferenceHandler.Infer)
+		r.Put("/{modelID}/config", modelHandler.UpdateConfig) // ✅ update config
+	})
 
+	r.Route(apiVersion+"/training", func(r chi.Router) {
+		r.Post("/jobs", trainingHandler.CreateJob)
+		r.Get("/jobs", trainingHandler.GetAllJobs)
 
-    r.Get("/", modelHandler.GetMyModels)                 // ✅ all models for user
-    r.Get("/{modelID}", modelHandler.GetModelDetails)    // ✅ single model
+		r.Get("/jobs/{jobID}", trainingHandler.GetJobByID)
+		r.Post("/jobs/{jobID}/deploy", modelHandler.DeployModel)
 
-    r.Put("/{modelID}/config", modelHandler.UpdateConfig) // ✅ update config
-})
-
-r.Route(apiVersion+"/training", func(r chi.Router) {
-	r.Post("/jobs", trainingHandler.CreateJob)
-	r.Get("/jobs", trainingHandler.GetAllJobs)
-
-
-	r.Get("/jobs/{jobID}", trainingHandler.GetJobByID)
-	r.Post("/jobs/{jobID}/deploy", modelHandler.DeployModel)
-
-})
+	})
 	apiVersionDocs := "/api/v1/llm/docs"
 
+	r.Route(apiVersionDocs, func(r chi.Router) {
 
+		r.Get("/", docsHandlers.GetPublicManifest)
+		r.Get("/internal/", docsHandlers.GetInternalManifest)
 
-r.Route(apiVersionDocs, func(r chi.Router) {
-	
-	r.Get("/", docsHandlers.GetPublicManifest)
-	r.Get("/internal/", docsHandlers.GetInternalManifest)
+		r.Get("/{slug}", docsHandlers.GetPublicDoc)
+		r.Get("/internal/{slug}", docsHandlers.GetInternalDoc)
+	})
 
-	r.Get("/{slug}", docsHandlers.GetPublicDoc)
-	r.Get("/internal/{slug}", docsHandlers.GetInternalDoc)
-})
+	// 1. Register with Eureka (with retries)
+	logger.Log.Info("Attempting Eureka registration",
+		zap.String("app", cfg.Eureka.AppName),
+	)
 
- 
+	for i := 0; i < 3; i++ {
+		err := discovery.RegisterWithEureka(cfg.Eureka, logger.Log)
+		if err != nil {
+			logger.Log.Warn("Eureka registration attempt failed",
+				zap.Int("attempt", i+1),
+				zap.Error(err),
+			)
 
-
-
-// 1. Register with Eureka (with retries)
-logger.Log.Info("Attempting Eureka registration",
-	zap.String("app", cfg.Eureka.AppName),
-)
-
-for i := 0; i < 3; i++ {
-	err := discovery.RegisterWithEureka(cfg.Eureka, logger.Log)
-	if err != nil {
-		logger.Log.Warn("Eureka registration attempt failed",
-			zap.Int("attempt", i+1),
-			zap.Error(err),
-		)
-
-		if i < 2 {
-			time.Sleep(5 * time.Second)
+			if i < 2 {
+				time.Sleep(5 * time.Second)
+			}
+		} else {
+			logger.Log.Info("Eureka registration successful")
+			break
 		}
-	} else {
-		logger.Log.Info("Eureka registration successful")
-		break
 	}
-}
 
-// Start heartbeat
-go discovery.SendHeartbeat(cfg.Eureka, logger.Log)
-
+	// Start heartbeat
+	go discovery.SendHeartbeat(cfg.Eureka, logger.Log)
 
 	log.Println("Server running on", cfg.ServerPort)
 	http.ListenAndServe(cfg.ServerPort, r)
