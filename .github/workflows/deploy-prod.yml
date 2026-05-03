@@ -82,7 +82,7 @@ jobs:
             docker service create \
             --name llm-gateway-prod \
             --network aws-prod-network \
-            --publish published=8805,target=8805 \
+            --publish published=7656,target=7656 \
             --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
             --env APP_PROFILE=prod \
             --env EUREKA_HOSTNAME=llm-gateway-prod \
