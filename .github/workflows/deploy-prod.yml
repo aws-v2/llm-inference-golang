@@ -86,7 +86,6 @@ jobs:
             --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
             --env APP_PROFILE=prod \
             --env EUREKA_HOSTNAME=llm-gateway-prod \
-            --env EUREKA_IP_ADDR=127.0.0.1 \
             --env SERVICE_PORT=8891 \
             --env SERVER_PORT=8891 \
             --env NATS_PREFIX=prod.v1 \
@@ -101,6 +100,7 @@ jobs:
             --env NATS_PASSWORD=nats-prod-password \
             --env EUREKA_SERVER_URL=http://discovery-server-prod:8761/eureka \
             --env PUBLIC_HOST_IP=192.168.1.7 \
+            --env EUREKA_IP_ADDR=llm-gateway-prod \
             --env AWS_REGION=eu-north-1 \
             qarani/llm-gateway:prod
 

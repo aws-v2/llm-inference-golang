@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"go.uber.org/zap"
 
 	"llm-inference-service/internal/config"
@@ -18,6 +22,24 @@ import (
 	"llm-inference-service/pkg/logger"
 )
 
+// runMigrations applies all pending up migrations from ./internal/migrations.
+func runMigrations(cfg config.DBConfig) {
+	dsn := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name,
+	)
+	m, err := migrate.New("file://./internal/migrations", dsn)
+	if err != nil {
+		log.Fatalf("migrate: failed to initialise: %v", err)
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("migrate: up failed: %v", err)
+	}
+	log.Println("Database migrations applied")
+}
+
 func main() {
 	cfg := config.Load()
 	// Initialize logger FIRST
@@ -28,10 +50,12 @@ func main() {
 	)
 
 	defer logger.Log.Sync()
+
+	// Run DB migrations before opening connections
+	runMigrations(cfg.DB)
+
 	// DB
 	database := db.NewPostgres(cfg.DB)
-
-	_ = database // will use later in model store
 
 	// NATS
 	nc, err := nats.NewClient(
