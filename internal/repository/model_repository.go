@@ -143,8 +143,8 @@ func (r *PostgresModelRepository) DeployModel(modelID string, ownerID string) (m
 		&job.Name,
 		&job.OwnerID,
 		&job.Status,
-		&job.InputPath,
-		&job.OutputPath,
+		// &job.InputPath,
+		// &job.OutputPath,
 	)
 
 	if err != nil {
@@ -160,7 +160,7 @@ func (r *PostgresModelRepository) DeployModel(modelID string, ownerID string) (m
 	newModel := model.Model{
 		ID:         uuid.NewString(),
 		Name:       job.Name + "-deployed",
-		FilePath:   job.OutputPath,
+		FilePath:   "job.",
 		OwnerID:    ownerID,
 		Status:     "Ready",
 		CreatedAt:  time.Now(),

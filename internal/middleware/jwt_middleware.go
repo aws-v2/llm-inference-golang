@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"log"
 	"net/http"
-	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
+ 
 )
 
 var jwtSecret []byte
@@ -20,43 +18,32 @@ func init() {
 }
 
 func GetOwnerID(r *http.Request) string {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return ""
-	}
+	userID := r.Header.Get("X-User-Id")
+	// userRole := r.Header.Get("X-User-Role")
+	// authMethod := r.Header.Get("X-Auth-Method")
+	
+	
+	
+	
 
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return ""
-	}
-
-	tokenStr := parts[1]
-
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-
-	if err != nil || !token.Valid {
-		log.Println("Invalid token:", err)
-		return ""
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return ""
-	}
-
-	// 👇 adjust depending on your auth service
-	if userID, ok := claims["userId"].(string); ok {
-		log.Println("Owner ID:", userID)
-		return userID
-	}
-
-	// fallback (common JWT field)
-	if userID, ok := claims["sub"].(string); ok {
-		log.Println("Owner ID (sub):", userID)
-		return userID
-	}
-
-	return ""
+	return userID
 }
+
+
+
+
+
+// package middleware
+
+ 
+// func AuthMiddleware() gin.HandlerFunc {
+//     return func(c *gin.Context) {
+//         // already being set somewhere — keep it
+//         c.Set("userID",     c.GetHeader("X-User-Id"))
+//         c.Set("userRole",   c.GetHeader("X-User-Role"))
+//         c.Set("authMethod", c.GetHeader("X-Auth-Method"))
+//         c.Set("token", c.GetHeader("Authorization"))
+ 
+//         c.Next()
+//     }
+// }

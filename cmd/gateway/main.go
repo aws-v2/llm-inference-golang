@@ -75,7 +75,7 @@ func main() {
 	modelService := service.NewModelService(modelStore)
 
 	trainingRepo := repository.NewPostgresTrainingRepo(database)
-	trainingService := service.NewTrainingService(trainingRepo)
+	trainingService := service.NewTrainingService(trainingRepo, nc)
 
 	docsService := service.NewDocsService("./docs")
 
@@ -84,7 +84,7 @@ func main() {
 	// Handlers
 	inferenceHandler := handler.NewInferenceHandler(nc)
 	modelHandler := handler.NewModelHandler(modelService, nc)
-	trainingHandler := handler.NewTrainingHandler(trainingService)
+	trainingHandler := handler.NewTrainingHandler(trainingService )
 	docsHandlers := handler.NewDocsHandler(docsService)
 
 	// Router
@@ -106,7 +106,9 @@ func main() {
 	r.Route(apiVersion+"/training", func(r chi.Router) {
 		r.Post("/jobs", trainingHandler.CreateJob)
 		r.Get("/jobs", trainingHandler.GetAllJobs)
-
+		r.Post("/jobs/{jobID}/nodes/{nodeID}/execute", trainingHandler.ExecuteNode)
+		r.Put("/jobs/{jobID}", trainingHandler.UpdateJob)
+		r.Post("/jobs/{jobID}/scripts/upload", trainingHandler.UploadScript)
 		r.Get("/jobs/{jobID}", trainingHandler.GetJobByID)
 		r.Post("/jobs/{jobID}/deploy", modelHandler.DeployModel)
 
