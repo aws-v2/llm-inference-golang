@@ -27,6 +27,8 @@ type TrainingJob struct {
 	Edges       []PipelineEdge `json:"edges"`
 	Pipeline    []string       `json:"pipeline"`
 	Status      string         `json:"status"`
+    BucketID string `json:"bucket_id"`
+
 	Progress    float64        `json:"progress"`
 	CreatedAt   time.Time      `json:"created_at"`
 	Tags        []string       `json:"tags"`
@@ -39,6 +41,7 @@ type PipelineScript struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
 	RouteTo string `json:"route_to"`
+    FileSha256    string `json:"sha256"`
 }
 
 // type PipelineNode struct {

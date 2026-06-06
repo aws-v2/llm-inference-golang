@@ -58,6 +58,8 @@ func (h *TrainingHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
 	ownerID := middleware.GetOwnerID(r)
+	sessionID := uuid.New().String()
+
 	if ownerID == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -82,7 +84,7 @@ func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pass the scriptID to the service. (Ensure your service method signature is updated to accept it)
-	result, err := h.service.ExecuteNode(ownerID, jobID, nodeID, scriptID)
+	result, err := h.service.ExecuteNode(ownerID, jobID, nodeID, scriptID,sessionID)
 	if err != nil {
 		log.Printf("execute node error: %s", err)
 		http.Error(w, "Failed to execute node", http.StatusInternalServerError)

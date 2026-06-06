@@ -38,6 +38,7 @@ CREATE TABLE models (
  
 
     ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS description TEXT; 
+    ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS bucket_id TEXT; 
     ALTER TABLE training_jobs ADD COLUMN IF  NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW(); 
     ALTER TABLE training_jobs ADD COLUMN IF  NOT EXISTS bucket_name TEXT DEFAULT ""; 
     ALTER TABLE training_jobs ADD COLUMN IF  NOT EXISTS session_id text TEXT NOT NULL; 

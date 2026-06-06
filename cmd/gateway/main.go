@@ -17,6 +17,7 @@ import (
 	discovery "llm-inference-service/internal/eureka"
 	"llm-inference-service/internal/nats"
 	"llm-inference-service/internal/repository"
+	"llm-inference-service/internal/sse"
 	service "llm-inference-service/internal/services"
 	handler "llm-inference-service/internal/transport/handler"
 	"llm-inference-service/pkg/logger"
@@ -70,6 +71,12 @@ func main() {
 	defer nc.Conn.Close()
 	log.Println("Connected to NATS")
 
+	// SSE hub — routes EC2 lifecycle events to browser clients.
+	sseHub := sse.NewHub()
+	if err := nc.Subscriber.SubscribeInstanceEvents(sseHub); err != nil {
+		log.Fatalf("Failed to subscribe to instance events: %v", err)
+	}
+
 	// Model store (still in-memory for now)
 	modelStore := repository.NewPostgresModelRepository(database)
 	modelService := service.NewModelService(modelStore)
@@ -84,8 +91,9 @@ func main() {
 	// Handlers
 	inferenceHandler := handler.NewInferenceHandler(nc)
 	modelHandler := handler.NewModelHandler(modelService, nc)
-	trainingHandler := handler.NewTrainingHandler(trainingService )
+	trainingHandler := handler.NewTrainingHandler(trainingService)
 	docsHandlers := handler.NewDocsHandler(docsService)
+	vmHandler := handler.NewVMHandler(sseHub)
 
 	// Router
 	r := chi.NewRouter()
@@ -113,6 +121,11 @@ func main() {
 		r.Post("/jobs/{jobID}/deploy", modelHandler.DeployModel)
 
 	})
+
+	r.Route(apiVersion+"/vm", func(r chi.Router) {
+		r.Get("/events/{sessionID}", vmHandler.StreamEvents)
+	})
+
 	apiVersionDocs := "/api/v1/llm/docs"
 
 	r.Route(apiVersionDocs, func(r chi.Router) {

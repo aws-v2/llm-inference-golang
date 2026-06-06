@@ -49,9 +49,9 @@ func (r *PostgresRepository) Create(job model.TrainingJob) error {
 		INSERT INTO training_jobs (
 			id, owner_id, name, status, description,
 			nodes, edges, pipeline, tags,
-			progress, created_at, session_id, bucket_name
+			progress, created_at, session_id, bucket_name, bucket_id
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, $14)
 	`
 
 	_, err = r.db.Exec(query,
@@ -68,6 +68,7 @@ func (r *PostgresRepository) Create(job model.TrainingJob) error {
 		job.CreatedAt,
 		job.SessionID,
 		job.BucketName,
+		job.BucketID,
 	)
 
 	return err
@@ -76,7 +77,7 @@ func (r *PostgresRepository) GetByID(jobID string, ownerID string) (model.Traini
 	query := `
 		SELECT id, owner_id, name, status, description,
 		       progress, created_at, session_id,
-		       nodes, edges, pipeline, tags, bucket_name
+		       nodes, edges, pipeline, tags, bucket_name,bucket_id
 		FROM training_jobs
 		WHERE id = $1 AND owner_id = $2
 	`
@@ -87,7 +88,7 @@ func (r *PostgresRepository) GetByID(jobID string, ownerID string) (model.Traini
 	err := r.db.QueryRow(query, jobID, ownerID).Scan(
 		&job.ID, &job.OwnerID, &job.Name, &job.Status, &job.Description,
 		&job.Progress, &job.CreatedAt, &job.SessionID,
-		&nodesJSON, &edgesJSON, &pipelineJSON, &tagsJSON, &job.BucketName,
+		&nodesJSON, &edgesJSON, &pipelineJSON, &tagsJSON, &job.BucketName,&job.BucketID,
 	)
 	if err != nil {
 		return job, err

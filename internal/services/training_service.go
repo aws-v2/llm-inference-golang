@@ -21,6 +21,54 @@ type TrainingService struct {
 	repo *repository.PostgresRepository
 	nc   *nats.Client
 }
+type AssetType string
+
+const (
+	AssetTypeGame     AssetType = "game"
+	AssetTypeTemplate AssetType = "template"
+	AssetTypeAgent    AssetType = "agent"
+	AssetTypeScript   AssetType = "script"
+)
+
+type createPresignedURLRequest struct {
+	UserID     string    `json:"user_id"`
+	GameID     string    `json:"game_id,omitempty"`
+	AssetID    string    `json:"asset_id"`
+	AssetName  string    `json:"asset_name"`
+	AssetType  AssetType `json:"asset_type"` // "game" | "template"
+	Sha256     string    `json:"sha256"`
+	Key        string    `json:"key"`
+	BucketName string    `json:"bucket_name"` // this is the nameof the job/game/render job this asset belongs to like kalshi or ruto tracker
+
+}
+type NodeExecutionResult struct {
+	NodeID     string     `json:"node_id"`
+	Status     string     `json:"status"`
+	StartedAt  time.Time  `json:"started_at"`
+	SessionID  string     `json:"session_id"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	Error      string     `json:"error,omitempty"`
+}
+type ArchiveByPrefixInputMessage struct {
+	BucketID    string `json:"bucket_id"`
+	Prefix      string `json:"prefix" binding:"required"`
+	ArchiveName string `json:"archive_name" binding:"required"`
+	Format      string `json:"format"` // zip or tar
+	UserID      string `json:"user_id"`
+}
+
+type createPresignDownloadURLRequest struct {
+	UserID        string `json:"user_id"`
+	CorrelationID string `json:"correlation_id"`
+	FileSha256    string `json:"sha256"`
+	AssetID       string `json:"asset_id"`
+}
+type createPresignDownloadURLResponse struct {
+	URL      string `json:"url"`
+	BucketID string `json:"bucket_id"`
+
+	FileCount int `json:"file_count"` // zip or tar
+}
 
 func NewTrainingService(repo *repository.PostgresRepository, nc *nats.Client) *TrainingService {
 	return &TrainingService{repo: repo,
@@ -39,6 +87,7 @@ type CreateDefaultBucketResponse struct {
 	BucketName string `json:"bucket_name"`
 	Created    bool   `json:"created"`
 	Error      string `json:"error,omitempty"`
+	BucketID   string `json:"bucket_id"`
 }
 
 func (s *TrainingService) CreateJob(ownerID string, req model.TrainingJobDto) (model.TrainingJob, error) {
@@ -61,8 +110,7 @@ func (s *TrainingService) CreateJob(ownerID string, req model.TrainingJobDto) (m
 		CorrelationID: uuid.New().String(),
 		UserID:        ownerID,
 		SessionID:     req.SessionID,
-		BucketName:    fmt.Sprintf("%s-scripst",bucketName),
-
+		BucketName:    fmt.Sprintf("%s-sg-project", bucketName),
 	}
 
 	respBytes, err := s.nc.Publisher.Request("s3.task.create_default_bucket", bucketReq)
@@ -101,6 +149,7 @@ func (s *TrainingService) CreateJob(ownerID string, req model.TrainingJobDto) (m
 		Nodes:       nodes,
 		Edges:       edges,
 		BucketName:  bucketName,
+		BucketID:    bucketResp.BucketID,
 		CreatedAt:   time.Now(),
 	}
 
@@ -119,8 +168,7 @@ func sanitizeBucketName(name string) string {
 			b.WriteRune(r)
 		}
 	}
-		// return fmt.Sprintf("%s-scripst",req.AssetName) ,req.Key, nil
-
+	// return fmt.Sprintf("%s-scripst",req.AssetName) ,req.Key, nil
 
 	log.Printf("This is the bucket name %s", b.String())
 	return b.String()
@@ -178,27 +226,6 @@ func (s *TrainingService) UpdateJob(req model.TrainingJobDto) (model.TrainingJob
 	return s.repo.UpdateJob(req)
 }
 
-type AssetType string
-
-const (
-	AssetTypeGame     AssetType = "game"
-	AssetTypeTemplate AssetType = "template"
-	AssetTypeAgent    AssetType = "agent"
-	AssetTypeScript   AssetType = "script"
-)
-
-type createPresignedURLRequest struct {
-	UserID    string    `json:"user_id"`
-	GameID    string    `json:"game_id,omitempty"`
-	AssetID   string    `json:"asset_id"`
-	AssetName   string    `json:"asset_name"`
-	AssetType AssetType `json:"asset_type"` // "game" | "template"
-	Sha256    string    `json:"sha256"`
-	Key       string    `json:"key"`
-	BucketName   string    `json:"bucket_name"`  // this is the nameof the job/game/render job this asset belongs to like kalshi or ruto tracker
-
-}
-
 func sha256File(file multipart.File) (string, error) {
 	h := sha256.New()
 	if _, err := io.Copy(h, file); err != nil {
@@ -226,17 +253,26 @@ func (s *TrainingService) GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, f
 		return ScriptUploadResponse{}, fmt.Errorf("hash file: %w", err)
 	}
 
-	s3Key := fmt.Sprintf("%s-scripts/%s/%s", job.Name, nodeType, filename)
+	s3Key := fmt.Sprintf("%s-node/scripts", nodeType)
+
+	// build script record with s3 path
+	script := model.PipelineScript{
+		ID:         fmt.Sprintf("script-%s", uuid.New().String()[:8]),
+		Name:       filename,
+		Path:       fmt.Sprintf("s3://%s/%s", job.BucketName, s3Key),
+		RouteTo:    routeTo,
+		FileSha256: checksum,
+	}
 
 	presignReq := createPresignedURLRequest{
-		UserID:    job.OwnerID,
-		GameID:    job.ID,
-		AssetID:   s3Key,
-		AssetName:   job.Name,
-		Key:       s3Key,
-		Sha256:    checksum,
-		AssetType: AssetTypeScript,
-		BucketName: fmt.Sprintf("%s-scripst", job.Name),
+		UserID:     job.OwnerID,
+		GameID:     job.ID,
+		AssetID:    script.ID,
+		AssetName:  job.Name,
+		Key:        s3Key,
+		Sha256:     checksum,
+		AssetType:  AssetTypeScript,
+		BucketName: fmt.Sprintf("%s-sg-project", job.BucketName),
 	}
 
 	respBytes, err := s.nc.Publisher.Request("s3.task.create_presigned_url", presignReq)
@@ -250,14 +286,6 @@ func (s *TrainingService) GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, f
 	}
 	if presignResp.UploadURL == "" {
 		return ScriptUploadResponse{}, fmt.Errorf("empty upload URL from s3 service")
-	}
-
-	// build script record with s3 path
-	script := model.PipelineScript{
-		ID:      fmt.Sprintf("script-%s", uuid.New().String()[:8]),
-		Name:    filename,
-		Path:    fmt.Sprintf("s3://%s/%s", job.BucketName, s3Key),
-		RouteTo: routeTo,
 	}
 
 	// inject into node
@@ -318,15 +346,7 @@ func (s *TrainingService) AddScriptByPath(ownerID, jobID, nodeID string, script 
 	})
 }
 
-type NodeExecutionResult struct {
-	NodeID     string     `json:"node_id"`
-	Status     string     `json:"status"`
-	StartedAt  time.Time  `json:"started_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
-	Error      string     `json:"error,omitempty"`
-}
-
-func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID string) (NodeExecutionResult, error) {
+func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID string, sessionID string) (NodeExecutionResult, error) {
 	// 1. fetch the job to validate ownership + get node
 	job, err := s.repo.GetByID(jobID, ownerID)
 	if err != nil {
@@ -352,11 +372,14 @@ func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID st
 	// 4. execute — decide between full node or single script
 	var execErr error
 	if scriptID == "" {
+		log.Printf("[EXECUTION] of all scripts ina nodes")
 		// Execute all scripts in the node (Standard behavior)
-		execErr = s.runNodeScripts(targetNode)
+		execErr = s.runAllNodeScripts(targetNode, job, sessionID)
 	} else {
+		log.Printf("[EXECUTION] of a single script in a node")
+
 		// Execute only the specific script provided
-		execErr = s.runSingleScript(targetNode, scriptID)
+		execErr = s.runSingleScript(targetNode, scriptID, job, sessionID)
 	}
 	// 5. mark node complete or failed
 	finishedAt := time.Now()
@@ -374,19 +397,20 @@ func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID st
 	// 6. trigger next node ONLY if full node execution was successful
 	// (We usually don't cascade if only a single manual script was run)
 	if execErr == nil && scriptID == "" && targetNode.Cascade {
-		go s.triggerNextNode(ownerID, job, nodeID)
+		go s.triggerNextNode(ownerID, job, nodeID, sessionID)
 	}
 	return NodeExecutionResult{
 		NodeID:     nodeID,
 		Status:     status,
 		StartedAt:  startedAt,
 		FinishedAt: &finishedAt,
+		SessionID:sessionID,
 		Error:      errMsg,
 	}, nil
 }
 
 // runSingleScript looks for a specific script within the node and executes it
-func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID string) error {
+func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID string, job model.TrainingJob, sessionID string) error {
 	var targetScript *model.PipelineScript
 	for _, sc := range node.Scripts {
 		if sc.ID == scriptID {
@@ -400,39 +424,132 @@ func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID str
 	log.Printf("[SINGLE SCRIPT MODE] node: %s, running script: %s path: %s", node.ID, targetScript.Name, targetScript.Path)
 
 	// Delegate to a shared execution helper
-	return s.executeScript(targetScript)
-}
-func (s *TrainingService) runNodeScripts(node *model.PipelineNode) error {
-	if len(node.Scripts) == 0 {
-		log.Printf("node %s has no scripts, skipping execution", node.ID)
-		return nil
-	}
-	for _, script := range node.Scripts {
-		if err := s.executeScript(&script); err != nil {
-			return err
-		}
-	}
-	log.Printf("[FULL NODE EXECUTION] node: %s, running script: %s path: %s", node.ID, node.Scripts[0].Name, node.Scripts[0].Path)
 
-	return nil
-}
-
-// executeScript is the core logic for running an individual script
-func (s *TrainingService) executeScript(script *model.PipelineScript) error {
-	log.Printf(">>>> EXECUTING: %s (Location: %s)", script.Name, script.Path)
+	log.Printf(">>>> EXECUTING: %s (Location: %s)", targetScript.Name, targetScript.Path)
 
 	// TODO: Provision VM, sync S3 data, and run the script
 	// ... we will solve this in the next step ...
 
+	var req createPresignDownloadURLRequest
+
+	req.AssetID = targetScript.ID
+	req.FileSha256 = targetScript.FileSha256
+	req.UserID = job.OwnerID
+	req.CorrelationID = uuid.New().String()
+
+	respBytes, err := s.nc.Publisher.Request("s3.task.create_presign_download_url", req)
+	if err != nil {
+		return fmt.Errorf("presign request failed: %w", err)
+	}
+
+	var presignResp createPresignDownloadURLResponse
+	if err := json.Unmarshal(respBytes, &presignResp); err != nil {
+		return fmt.Errorf("unmarshal presign resp: %w", err)
+	}
+
+	log.Printf(">>>> PRESIGNED_DOWNLOAD_URLS: %s )", presignResp)
+
+	payload := EC2ProvisionRequest{
+		Profile:   "ai-worker",
+		Specs:     map[string]int{"cpu": 2, "ram": 4096},
+		SessionID: sessionID,
+		UserID:    job.OwnerID,
+		Manifest: AIManifest{
+			ProjID:    job.ID,
+			ProjName:  job.Name,
+			CreatedAt: job.CreatedAt,
+		},
+	}
+
+	ec2RespBytes, err := s.nc.Publisher.Request("ec2.task.provision", payload)
+
+	if err != nil {
+		return fmt.Errorf("presign request failed: %w, %s", err, string(ec2RespBytes))
+	}
+
+	return nil
+
+}
+
+type AIManifest struct {
+	ID         string            `json:"id"           gorm:"primaryKey"`
+	ProjID     string            `json:"game_id"      gorm:"index"`
+	ProjName   string            `json:"name"`
+	CreatedAt  time.Time         `json:"created_at"`
+	Parameters map[string]string `json:"parameters"`
+}
+type EC2ProvisionRequest struct {
+	Profile    string            `json:"profile"`
+	Specs      map[string]int    `json:"specs"`
+	Parameters map[string]string `json:"parameters"`
+	UserID     string            `json:"user_id"`
+	StorageARN string            `json:"storage_arn"`
+	Manifest   AIManifest        `json:"manifest"`
+	SessionID  string            `json:"session_id"`
+}
+
+func (s *TrainingService) runAllNodeScripts(node *model.PipelineNode, job model.TrainingJob, sessionID string) error {
+	if len(node.Scripts) == 0 {
+		log.Printf("node %s has no scripts, skipping execution", node.ID)
+		return nil
+	}
+	var req ArchiveByPrefixInputMessage
+	req.BucketID = job.BucketID
+	req.UserID = job.OwnerID
+	s3Prefix := fmt.Sprintf("%s-node/scripts", node.Type)
+
+	req.Prefix = s3Prefix //fmt.Sprintf("%s/%s", projectName, node.Label)
+	req.ArchiveName = fmt.Sprintf("%s-archive-%s", node.Label, time.Now().Format("2006-01-02_15-04-05"))
+	req.Format = "zip"
+
+	log.Printf("[ArchiveByPrefix] raw response**: %s", job.OwnerID)
+
+	respBytes, err := s.nc.Publisher.Request("s3.task.create_zip_download_url", req)
+	if err != nil {
+		return fmt.Errorf("presign request failed: %w", err)
+	}
+
+	// Log raw response
+
+	var presignResp createPresignDownloadURLResponse
+	if err := json.Unmarshal(respBytes, &presignResp); err != nil {
+		return fmt.Errorf("unmarshal presign resp: %w", err)
+	}
+
+	log.Printf("[ArchiveByPrefix] Files returned: %d files, with this download url %s", presignResp.FileCount, presignResp.URL)
+
+	payload := EC2ProvisionRequest{
+		Profile:   "ai-worker",
+		Specs:     map[string]int{"cpu": 2, "ram": 4096},
+		SessionID: sessionID,
+		UserID:    job.OwnerID,
+		// Manifest: AIManifest{
+		// 	ProjID:   job.ID,
+		// 	ProjName: job.Name,
+		// 	CreatedAt: job.CreatedAt,
+		// },
+	}
+	// data, err := json.Marshal(payload)
+	// 	log.Printf("PROVISION_GAME_PAYLOAD_MARSHAL_FAILED %s", data.)
+
+	if err != nil {
+		log.Printf("PROVISION_GAME_PAYLOAD_MARSHAL_FAILED")
+		return fmt.Errorf("failed to marshal provision payload: %w", err)
+	}
+	ec2RespBytes, err := s.nc.Publisher.Request("ec2.task.provision", payload)
+
+	if err != nil {
+		return fmt.Errorf("presign request failed: %w, %s", err, string(ec2RespBytes))
+	}
 	return nil
 }
 
-func (s *TrainingService) triggerNextNode(ownerID string, job model.TrainingJob, currentNodeID string) {
+func (s *TrainingService) triggerNextNode(ownerID string, job model.TrainingJob, currentNodeID, sessionID string) {
 	// find the edge where fromNodeId == currentNodeID
 	for _, edge := range job.Edges {
 		if edge.FromNodeId == currentNodeID {
 			log.Printf("cascading to next node: %s", edge.ToNodeId)
-			_, err := s.ExecuteNode(ownerID, job.ID, edge.ToNodeId, "")
+			_, err := s.ExecuteNode(ownerID, job.ID, edge.ToNodeId, sessionID, "")
 			if err != nil {
 				log.Printf("cascade execute failed: %s", err)
 			}
