@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"llm-inference-service/internal/sse"
 
@@ -26,16 +27,31 @@ func NewVMHandler(hub *sse.Hub) *VMHandler {
 // per EC2 lifecycle notification until the session channel is closed or the
 // client disconnects.
 func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
+	// CORS handling for custom headers (Authorization)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
+
+
+	log.Printf("[SSE] client connected for session ====>",)
+
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	sessionID := chi.URLParam(r, "sessionID")
 	if sessionID == "" {
 		http.Error(w, "missing sessionID", http.StatusBadRequest)
 		return
 	}
 
+
 	// Verify the client can flush — required for SSE.
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		// http.Error(w, "streaming not supported", http.StatusInmsgternalServerError)
 		return
 	}
 
@@ -56,11 +72,19 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	defer h.hub.Unregister(sessionID)
 
 	ctx := r.Context()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Printf("[SSE] client disconnected for session %s", sessionID)
 			return
+
+		case <-ticker.C:
+			// Send a keep-alive comment to prevent API Gateway proxies from dropping the idle connection.
+			fmt.Fprintf(w, ":ping\n\n")
+			flusher.Flush()
 
 		case msg, open := <-ch:
 			if !open {
@@ -72,6 +96,8 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 			// Each message is already a JSON blob; wrap it in an SSE frame.
 			fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
+			log.Printf("[SSE] Sent data to session %s: %s", sessionID, string(msg))
 		}
+
 	}
 }

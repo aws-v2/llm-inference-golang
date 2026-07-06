@@ -58,17 +58,13 @@ func (h *TrainingHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
 	ownerID := middleware.GetOwnerID(r)
-	sessionID := uuid.New().String()
-
 	if ownerID == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	jobID  := chi.URLParam(r, "jobID")
+	jobID := chi.URLParam(r, "jobID")
 	nodeID := chi.URLParam(r, "nodeID")
-	
-	// Get the optional script_id from query parameters
 	scriptID := r.URL.Query().Get("script_id")
 
 	if jobID == "" || nodeID == "" {
@@ -76,24 +72,34 @@ func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the mode of execution
+	// Generate a unique session ID for accurate SSE tracking.
+	sessionID := uuid.New().String()
+
 	if scriptID != "" {
-		log.Printf("[EXECUTION] Owner: %s, Job: %s, Node: %s -> Executing SINGLE SCRIPT: %s", ownerID, jobID, nodeID, scriptID)
+		log.Printf("[EXECUTION] Owner: %s, Job: %s, Node: %s -> Executing SINGLE SCRIPT: %s (Session: %s)", ownerID, jobID, nodeID, scriptID, sessionID)
 	} else {
-		log.Printf("[EXECUTION] Owner: %s, Job: %s, Node: %s -> Executing FULL NODE (all scripts)", ownerID, jobID, nodeID)
+		log.Printf("[EXECUTION] Owner: %s, Job: %s, Node: %s -> Executing FULL NODE (Session: %s)", ownerID, jobID, nodeID, sessionID)
 	}
 
-	// Pass the scriptID to the service. (Ensure your service method signature is updated to accept it)
-	result, err := h.service.ExecuteNode(ownerID, jobID, nodeID, scriptID,sessionID)
-	if err != nil {
-		log.Printf("execute node error: %s", err)
-		http.Error(w, "Failed to execute node", http.StatusInternalServerError)
-		return
-	}
+	// Launch execution in the background so we can return the sessionID immediately.
+	// This allows the frontend to establish its SSE connection before provisioning starts.
+	go func() {
+		_, err := h.service.ExecuteNode(ownerID, jobID, nodeID, scriptID, sessionID)
+		if err != nil {
+			log.Printf("[ASYNC EXECUTION ERROR] Job: %s, Node: %s, Session: %s: %v", jobID, nodeID, sessionID, err)
+		}
+	}()
 
+	// Return initial status and sessionID immediately.
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"session_id": sessionID,
+		"job_id":     jobID,
+		"node_id":    nodeID,
+		"status":     "running",
+	})
 }
+
 
 
 

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/lib/pq"
 	"llm-inference-service/internal/config"
+	"llm-inference-service/pkg/logger"
+
+	_ "github.com/lib/pq"
 )
 
 func NewPostgres(cfg config.DBConfig) *sql.DB {
@@ -24,6 +26,6 @@ func NewPostgres(cfg config.DBConfig) *sql.DB {
 		log.Fatal("DB ping failed:", err)
 	}
 
-	log.Println("Connected to PostgreSQL")
+	logger.Info("Connected to PostgreSQL")
 	return db
 }

@@ -4,23 +4,26 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+ 
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"go.uber.org/zap"
+
+	// "go.uber.org/zap"
 
 	"llm-inference-service/internal/config"
 	"llm-inference-service/internal/db"
 	discovery "llm-inference-service/internal/eureka"
 	"llm-inference-service/internal/nats"
 	"llm-inference-service/internal/repository"
-	"llm-inference-service/internal/sse"
 	service "llm-inference-service/internal/services"
+	"llm-inference-service/internal/sse"
 	handler "llm-inference-service/internal/transport/handler"
 	"llm-inference-service/pkg/logger"
+	// "llm-inference-service/pkg/logger"
 )
 
 // runMigrations applies all pending up migrations from ./internal/migrations.
@@ -38,19 +41,12 @@ func runMigrations(cfg config.DBConfig) {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Fatalf("migrate: up failed: %v", err)
 	}
-	log.Println("Database migrations applied")
+		logger.Info("Database migrations applied")
+	
 }
 
 func main() {
 	cfg := config.Load()
-	// Initialize logger FIRST
-	logger.Init(
-		cfg.ServiceName, // or hardcode if you don’t have it yet
-		cfg.Profile,
-		cfg.Region,
-	)
-
-	defer logger.Log.Sync()
 
 	// Run DB migrations before opening connections
 	runMigrations(cfg.DB)
@@ -69,7 +65,7 @@ func main() {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
 	defer nc.Conn.Close()
-	log.Println("Connected to NATS")
+		logger.Info("Connected to NATS")
 
 	// SSE hub — routes EC2 lifecycle events to browser clients.
 	sseHub := sse.NewHub()
@@ -84,7 +80,7 @@ func main() {
 	trainingRepo := repository.NewPostgresTrainingRepo(database)
 	trainingService := service.NewTrainingService(trainingRepo, nc)
 
-	docsService := service.NewDocsService("./docs")
+	docsService := service.NewDocsService(cfg.DocsPath)
 
 	// Workers
 
@@ -122,8 +118,9 @@ func main() {
 
 	})
 
-	r.Route(apiVersion+"/vm", func(r chi.Router) {
+	r.Route("/api/v1/llm/vm", func(r chi.Router) {
 		r.Get("/events/{sessionID}", vmHandler.StreamEvents)
+		r.Options("/events/{sessionID}", vmHandler.StreamEvents)
 	})
 
 	apiVersionDocs := "/api/v1/llm/docs"
@@ -131,37 +128,32 @@ func main() {
 	r.Route(apiVersionDocs, func(r chi.Router) {
 
 		r.Get("/", docsHandlers.GetPublicManifest)
-		r.Get("/internal/", docsHandlers.GetInternalManifest)
+		// r.Get("/internal/", docsHandlers.GetInternalManifest)
 
 		r.Get("/{slug}", docsHandlers.GetPublicDoc)
 		r.Get("/internal/{slug}", docsHandlers.GetInternalDoc)
 	})
 
 	// 1. Register with Eureka (with retries)
-	logger.Log.Info("Attempting Eureka registration",
-		zap.String("app", cfg.Eureka.AppName),
-	)
+	logger.Info("Attempting Eureka registration %s",cfg.Eureka.AppName)
 
 	for i := 0; i < 3; i++ {
-		err := discovery.RegisterWithEureka(cfg.Eureka, logger.Log)
+		err := discovery.RegisterWithEureka(cfg.Eureka)
 		if err != nil {
-			logger.Log.Warn("Eureka registration attempt failed",
-				zap.Int("attempt", i+1),
-				zap.Error(err),
-			)
+			logger.Warn("Eureka registration attempt failed attempt %d with error %v",i + 1,err.Error())
 
 			if i < 2 {
 				time.Sleep(5 * time.Second)
 			}
 		} else {
-			logger.Log.Info("Eureka registration successful")
+			logger.Info("Eureka registration successful")
 			break
 		}
 	}
 
 	// Start heartbeat
-	go discovery.SendHeartbeat(cfg.Eureka, logger.Log)
+	go discovery.SendHeartbeat(cfg.Eureka)
 
-	log.Println("Server running on", cfg.ServerPort)
+	logger.Info("Server running on %d", cfg.ServerPort)
 	http.ListenAndServe(cfg.ServerPort, r)
 }

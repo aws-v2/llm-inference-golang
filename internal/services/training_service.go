@@ -548,11 +548,12 @@ func (s *TrainingService) triggerNextNode(ownerID string, job model.TrainingJob,
 	// find the edge where fromNodeId == currentNodeID
 	for _, edge := range job.Edges {
 		if edge.FromNodeId == currentNodeID {
-			log.Printf("cascading to next node: %s", edge.ToNodeId)
-			_, err := s.ExecuteNode(ownerID, job.ID, edge.ToNodeId, sessionID, "")
+			log.Printf("cascading to next node: %s (Session: %s)", edge.ToNodeId, sessionID)
+			_, err := s.ExecuteNode(ownerID, job.ID, edge.ToNodeId, "", sessionID)
 			if err != nil {
 				log.Printf("cascade execute failed: %s", err)
 			}
+
 			return
 		}
 	}

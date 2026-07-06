@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"llm-inference-service/internal/sse"
+	"llm-inference-service/pkg/logger"
 
 	"github.com/nats-io/nats.go"
 )
@@ -114,6 +115,6 @@ func (s *Subscriber) SubscribeInstanceEvents(hub *sse.Hub) error {
 		return fmt.Errorf("subscribe instance events: %w", err)
 	}
 
-	log.Println("[SSE] Subscribed to", fullSubject)
+		logger.Info("[SSE] Subscribed to: "+fullSubject)
 	return nil
 }

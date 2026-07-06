@@ -2,8 +2,9 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
 	service "llm-inference-service/internal/services"
+	"llm-inference-service/pkg/logger"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -21,9 +22,11 @@ func NewDocsHandler(service *service.DocsService) *DocsHandler {
  * GET /docs/manifest
  */
 func (h *DocsHandler) GetPublicManifest(w http.ResponseWriter, r *http.Request) {
-	log.Println("[docs] GET /docs/manifest")
+	logger.Info("[docs] GET /docs/manifest")
+	userRole := r.Header.Get("x-User-Role")
 
-	data, err := h.service.GetManifest(false)
+
+	data, err := h.service.GetManifest(userRole)
 	if err != nil {
 		log.Printf("[docs] GetPublicManifest error: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -41,23 +44,23 @@ func (h *DocsHandler) GetPublicManifest(w http.ResponseWriter, r *http.Request) 
 /**
  * GET /docs/internal/manifest
  */
-func (h *DocsHandler) GetInternalManifest(w http.ResponseWriter, r *http.Request) {
-	log.Println("[docs] GET /docs/internal/manifest")
+// func (h *DocsHandler) GetInternalManifest(w http.ResponseWriter, r *http.Request) {
+// 	logger.Info("[docs] GET /docs/internal/manifest")
 
-	data, err := h.service.GetManifest(true)
-	if err != nil {
-		log.Printf("[docs] GetInternalManifest error: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
-		return
-	}
+// 	data, err := h.service.GetManifest(true)
+// 	if err != nil {
+// 		log.Printf("[docs] GetInternalManifest error: %v", err)
+// 		writeJSON(w, http.StatusInternalServerError, map[string]string{
+// 			"error": err.Error(),
+// 		})
+// 		return
+// 	}
 
-	log.Println("[docs] GetInternalManifest OK")
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data": data,
-	})
-}
+// 	logger.Info("[docs] GetInternalManifest OK")
+// 	writeJSON(w, http.StatusOK, map[string]interface{}{
+// 		"data": data,
+// 	})
+// }
 
 /**
  * GET /docs/{slug}

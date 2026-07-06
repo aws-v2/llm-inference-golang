@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"llm-inference-service/pkg/logger"
+
+	// "llm-inference-service/pkg/logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,9 +60,9 @@ type DocsService struct {
 func NewDocsService(basePath string) *DocsService {
 	return &DocsService{
 		basePath: basePath,
-		log: logger.Log.With(
-			zap.String(logger.F.Domain, "docs"),
-		),
+		// log: logger.Log.With(
+		// 	zap.String(logger.F.Domain, "docs"),
+		// ),
 	}
 }
 
@@ -68,48 +70,31 @@ func NewDocsService(basePath string) *DocsService {
 // Public API
 // =====================
 
-func (s *DocsService) GetManifest(internal bool) (*DocManifest, error) {
-	scope := s.getScope(internal)
+func (s *DocsService) GetManifest(userRole string) (*DocManifest, error) {
+	scope := "internal"
+	if userRole == "ADMIN" || userRole == "SYSTEM" || userRole == "STAFF" {
+		scope = "internal"
+	}
+
 	path := filepath.Join(s.basePath, scope, "manifest.json")
 
-	s.log.Debug("reading manifest",
-		zap.String("path", path),
-		zap.String("scope", scope),
-	)
+	logger.Debug(fmt.Sprintf("the paths for the files is %s/%s/manifest.json", s.basePath, scope))
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			s.log.Warn("manifest not found",
-				zap.String(logger.F.ErrorKind, "manifest_not_found"),
-				zap.String("path", path),
-				zap.String("scope", scope),
-			)
+
 			return nil, fmt.Errorf("manifest not found at %q — check DOCS_PATH and folder structure", path)
 		}
-		s.log.Error("failed to read manifest",
-			zap.String(logger.F.ErrorKind, "manifest_read_error"),
-			zap.String("path", path),
-			zap.Error(err),
-		)
+
 		return nil, fmt.Errorf("failed to read manifest at %q: %w", path, err)
 	}
 
 	var manifest DocManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		s.log.Error("manifest JSON invalid",
-			zap.String(logger.F.ErrorKind, "manifest_parse_error"),
-			zap.String("path", path),
-			zap.Error(err),
-		)
+
 		return nil, fmt.Errorf("invalid manifest JSON at %q: %w", path, err)
 	}
-
-	s.log.Debug("manifest loaded",
-		zap.String("service", manifest.Service),
-		zap.String("version", manifest.Version),
-		zap.Int("category_count", len(manifest.Categories)),
-	)
 
 	return &manifest, nil
 }
@@ -120,7 +105,7 @@ func (s *DocsService) GetDoc(slug string, internal bool) (*DocResponse, error) {
 
 	if !isValidSlug(slug) {
 		s.log.Warn("invalid slug rejected",
-			zap.String(logger.F.ErrorKind, "invalid_slug"),
+			// zap.String(logger.F.ErrorKind, "invalid_slug"),
 			zap.String("slug", slug),
 			zap.String("scope", scope),
 		)
@@ -129,40 +114,17 @@ func (s *DocsService) GetDoc(slug string, internal bool) (*DocResponse, error) {
 
 	path := filepath.Join(s.basePath, scope, slug+".md")
 
-	s.log.Debug("reading doc",
-		zap.String("slug", slug),
-		zap.String("path", path),
-		zap.String("scope", scope),
-	)
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			s.log.Warn("doc not found",
-				zap.String(logger.F.ErrorKind, "doc_not_found"),
-				zap.String("slug", slug),
-				zap.String("path", path),
-				zap.String("scope", scope),
-			)
+
 			return nil, errors.New("not found")
 		}
-		s.log.Error("failed to read doc",
-			zap.String(logger.F.ErrorKind, "doc_read_error"),
-			zap.String("slug", slug),
-			zap.String("path", path),
-			zap.Error(err),
-		)
+
 		return nil, errors.New("not found")
 	}
 
 	meta, content := parseMarkdownWithFrontmatter(string(data))
-
-	s.log.Debug("doc loaded",
-		zap.String("slug", slug),
-		zap.String("title", meta.Title),
-		zap.Strings("tags", meta.Tags),
-		zap.Int("content_bytes", len(content)),
-	)
 
 	return &DocResponse{
 		Metadata: meta,

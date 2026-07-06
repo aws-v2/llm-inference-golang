@@ -1,91 +1,82 @@
 package logger
 
 import (
+	"log"
 	"os"
-	"strings"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-var Log *zap.Logger
 
-// Init builds a profile-aware logger.
-//   - dev:            human-readable console output, DEBUG level, caller shown
-//   - staging / prod: structured JSON to stdout, INFO level, ELK-ready envelope
-func Init(serviceName, profile, region string) {
-	var core zapcore.Core
+const (
+	InfoLevel = iota
+	DebugLevel
+	WarningLevel
+	ErrorLevel
+	TraceLevel
+	FatalLevel // its susppose to represent 'log this and then exit with status 1'
+)
 
-	level := resolveLevel(profile)
+type Logger struct{
+	Level int
+	InfoLogger *log.Logger
+	DebugLogger *log.Logger
+	WarningLogger *log.Logger
+	ErrorLogger *log.Logger
+	TraceLogger *log.Logger
+	FatalLogger *log.Logger
+}
 
-	switch strings.ToLower(profile) {
-	case "dev", "development", "local":
-		core = devCore(level)
-	default:
-		core = jsonCore(level, serviceName, profile, region)
+
+var logger *Logger
+
+
+func init(){
+	logger = &Logger{
+		Level: InfoLevel,
+		InfoLogger: log.New(os.Stdout,"INFO: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+		DebugLogger: log.New(os.Stdout,"DEBUG: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+		WarningLogger: log.New(os.Stdout,"WARNING: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+		TraceLogger: log.New(os.Stdout,"TRACE: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+		ErrorLogger: log.New(os.Stdout,"ERROR: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+		FatalLogger: log.New(os.Stdout,"FATAL: ", log.LstdFlags|log.Ldate|log.Lshortfile),
+	}
+}
+
+
+func SetLevel(level int){
+	logger.Level = level
+}
+
+
+
+
+func Info(message string, v ...any){
+	if logger.Level <= InfoLevel{
+		logger.InfoLogger.Println(message)
 	}
 
-	Log = zap.New(core,
-		zap.AddCaller(),
-		zap.AddStacktrace(zapcore.ErrorLevel),
-	)
 }
-
-// devCore writes colorized, human-readable logs to stderr.
-func devCore(level zapcore.Level) zapcore.Core {
-	cfg := zap.NewDevelopmentEncoderConfig()
-	cfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	cfg.EncodeTime = zapcore.TimeEncoderOfLayout("15:04:05.000")
-
-	return zapcore.NewCore(
-		zapcore.NewConsoleEncoder(cfg),
-		zapcore.AddSync(os.Stderr),
-		level,
-	)
-}
-
-// jsonCore writes structured JSON to stdout — one line per log entry,
-// with static service/profile/region fields baked in at construction.
-// This is what Filebeat picks up and ships to Logstash → Elasticsearch.
-func jsonCore(level zapcore.Level, service, profile, region string) zapcore.Core {
-	cfg := zap.NewProductionEncoderConfig()
-	cfg.TimeKey    = F.Timestamp
-	cfg.LevelKey   = F.Level
-	cfg.MessageKey = F.Message
-	cfg.CallerKey  = F.Caller
-	cfg.EncodeTime  = zapcore.ISO8601TimeEncoder
-	cfg.EncodeLevel = zapcore.LowercaseLevelEncoder
-
-	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(cfg),
-		zapcore.AddSync(os.Stdout),
-		level,
-	)
-
-	// Bake service identity into every log line so Kibana can filter
-	// by service/profile/region without needing Logstash enrichment.
-	return core.With([]zapcore.Field{
-		zap.String(F.Service, service),
-		zap.String(F.Profile, profile),
-		zap.String(F.Region, region),
-	})
-}
-
-func resolveLevel(profile string) zapcore.Level {
-	// Allow explicit override via LOG_LEVEL env var
-	if raw := os.Getenv("LOG_LEVEL"); raw != "" {
-		var l zapcore.Level
-		if err := l.UnmarshalText([]byte(strings.ToLower(raw))); err == nil {
-			return l
-		}
+func Debug(message string, v ...any){
+		if logger.Level <= DebugLevel{
+		logger.InfoLogger.Println(message)
 	}
-
-	switch strings.ToLower(profile) {
-	case "dev", "development", "local":
-		return zapcore.DebugLevel
-	case "staging":
-		return zapcore.DebugLevel // verbose on staging so you can trace issues
-	default:
-		return zapcore.InfoLevel
+}
+func Warn(message string, v ...any){
+		if logger.Level <= WarningLevel{
+		logger.InfoLogger.Println(message)
+	}
+}
+func Trace(message string, v ...any){
+		if logger.Level <= TraceLevel{
+		logger.InfoLogger.Println(message)
+	}
+}
+func Error(message string, v ...any){
+		if logger.Level <= ErrorLevel{
+		logger.InfoLogger.Println(message)
+	}
+}
+func Fatal(message string, v ...any){
+		if logger.Level <= FatalLevel{
+		logger.InfoLogger.Println(message)
 	}
 }
