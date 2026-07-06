@@ -447,7 +447,7 @@ func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID str
 		return fmt.Errorf("unmarshal presign resp: %w", err)
 	}
 
-	log.Printf(">>>> PRESIGNED_DOWNLOAD_URLS: %s )", presignResp)
+	log.Printf(">>>> PRESIGNED_DOWNLOAD_URLS: %+v )", presignResp)
 
 	payload := EC2ProvisionRequest{
 		Profile:   "ai-worker",
