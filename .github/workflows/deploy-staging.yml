@@ -55,7 +55,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: qarani/llm-gateway:staging
+        tags: qarani/llm-gateway:staging-${{github.sha}}, qarani/llm-gateway:stagin
 
   staging-deploy:
     needs: staging-build-image
@@ -78,8 +78,8 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             docker network create aws-staging-network || true
-            docker pull qarani/llm-gateway:staging
-            docker stop llm-gateway-staging || true
+            docker pull qarani/llm-gateway:staging-${{github.sha}}
+            docker stop llm-gateway-staging || true 
             docker rm llm-gateway-staging || true
             docker run -d --name llm-gateway-staging \
             --network aws-staging-network \
@@ -107,7 +107,7 @@ jobs:
             -e DB_NAME=llm_db \
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
-            qarani/llm-gateway:staging
+            qarani/llm-gateway:staging-${{github.sha}}
 
   staging-open-pr-to-main:
     needs: staging-deploy
