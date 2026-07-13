@@ -135,7 +135,7 @@ func main() {
 	})
 
 	// 1. Register with Eureka (with retries)
-	logger.Info("Attempting Eureka registration %s",cfg.Eureka.AppName)
+	logger.Info("Attempting Eureka registration: "+cfg.Eureka.AppName)
 
 	for i := 0; i < 3; i++ {
 		err := discovery.RegisterWithEureka(cfg.Eureka)
@@ -154,6 +154,6 @@ func main() {
 	// Start heartbeat
 	go discovery.SendHeartbeat(cfg.Eureka)
 
-	logger.Info("Server running on %d", cfg.ServerPort)
+	logger.Info("Server running on "+ cfg.ServerPort)
 	http.ListenAndServe(cfg.ServerPort, r)
 }
