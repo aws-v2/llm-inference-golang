@@ -1,0 +1,63 @@
+{
+    "id":"2c7b7cf5-0149-4019-b16a-5efc3ec9f98d",
+    "owner_id":"00000000-0000-0000-0000-000000000000",
+    "name":"k3",
+    "description":"kd",
+    "nodes":[
+        {
+            "id":"node-0",
+            "type":"ingest",
+            "label":"ingest",
+            "scripts":[
+                {
+                    "id":"script-5d737bff",
+                    "name":"ingest_news.py",
+                    "path":"s3://k3/ingest-node/scripts",
+                    "route_to":"",
+                    "sha256":"d3158699621e445153578ee3c023bd16606e08667b3e7e1fd4f1e0424f03667a"
+                }],
+                
+            "schedule":"1m",
+            "cascade":true,
+            "x":60,
+            "y":120,
+            "vmMode":"shared",
+            "vm":"shared-01",
+            "destBucket":"k3/ingest_dest",
+            "srcBucket":"k3/ingest_src",
+            "status":"failed",
+            "started_at":"2026-07-16T14:07:23.831607516+03:00",
+            "finished_at":"2026-07-16T14:07:53.929568112+03:00",
+            "error":"presign request failed: nats: timeout,"
+        },
+        {"id":"node-1","type":"clean","label":"clean","scripts":[],"schedule":"1m","cascade":true,"x":270,"y":120,"vmMode":"shared","vm":"shared-01","destBucket":"k3/clean_dest","srcBucket":"k3/ingest_dest","status":""},
+        {"id":"node-2","type":"train","label":"train","scripts":[],"schedule":"1m","cascade":true,"x":480,"y":120,"vmMode":"shared","vm":"shared-01","destBucket":"k3/train_dest","srcBucket":"k3/clean_dest","status":""},
+        {"id":"node-3","type":"evaluate","label":"evaluate","scripts":[],"schedule":"1m","cascade":true,"x":690,"y":120,"vmMode":"shared","vm":"shared-01","destBucket":"k3/evaluate_dest","srcBucket":"k3/train_dest","status":""},
+        {"id":"node-4","type":"deploy","label":"deploy","scripts":[],"schedule":"1m","cascade":false,"x":900,"y":120,"vmMode":"shared","vm":"shared-01","destBucket":"k3/deploy_dest","srcBucket":"k3/evaluate_dest","status":""}
+        
+    ],
+
+
+
+
+    "edges":[
+        {
+            "id":"edge-0",
+            "fromNodeId":"node-0",
+            "toNodeId":"node-1"
+        },
+        {"id":"edge-1","fromNodeId":"node-1","toNodeId":"node-2"},
+        {"id":"edge-2","fromNodeId":"node-2","toNodeId":"node-3"},
+        {"id":"edge-3","fromNodeId":"node-3","toNodeId":"node-4"}
+    ],
+
+
+    "pipeline":null,
+    "status":"Initializing",
+    "bucket_id":"",
+    "progress":0,
+    "created_at":"2026-07-16T14:04:50.385142Z",
+    "tags":["nmp"],
+    "session_id":"59376ece-0cfe-44e9-8443-3e46ce7f7826",
+    "bucket_name":""
+}

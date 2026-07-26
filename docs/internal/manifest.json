@@ -4,7 +4,7 @@
   "type": "internal-docs",
   "description": "Internal engineering documentation for the SageMaker service. Covers pipeline execution, VM orchestration, task scheduling, SDK design, artifact management, container runtime, deployment, and platform architecture.",
   "audience": "developers",
-  "visibility": "public",
+  "visibility": "internal",
 
   "categories": [
     {
@@ -15,63 +15,8 @@
           "slug": "architecture"
         },
         {
-          "title": "Execution Model",
-          "slug": "execution-model"
-        }
-      ]
-    },
-    {
-      "title": "Core Components",
-      "items": [
-        {
-          "title": "SDK",
-          "slug": "sdk"
-        },
-        {
-          "title": "Workspace",
-          "slug": "workspace"
-        },
-        {
-          "title": "Artifacts",
-          "slug": "artifacts"
-        },
-        {
-          "title": "Scheduler",
-          "slug": "scheduler"
-        }
-      ]
-    },
-    {
-      "title": "Execution Infrastructure",
-      "items": [
-        {
-          "title": "Provisioning",
-          "slug": "provisioning"
-        },
-        {
-          "title": "Containers",
-          "slug": "containers"
-        },
-        {
-          "title": "Logging",
-          "slug": "logging"
-        },
-        {
-          "title": "Deployment",
-          "slug": "deployment"
-        }
-      ]
-    },
-    {
-      "title": "Reliability",
-      "items": [
-        {
-          "title": "Failure Recovery",
-          "slug": "failure-recovery"
-        },
-        {
-          "title": "Future Work",
-          "slug": "future-work"
+          "title": "Api Architexture",
+          "slug": "api-architexture"
         }
       ]
     }

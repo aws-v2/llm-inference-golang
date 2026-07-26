@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
- 
+
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +22,7 @@ import (
 	service "llm-inference-service/internal/services"
 	"llm-inference-service/internal/sse"
 	handler "llm-inference-service/internal/transport/handler"
+	"llm-inference-service/internal/transport/middleware"
 	"llm-inference-service/pkg/logger"
 	// "llm-inference-service/pkg/logger"
 )
@@ -94,6 +95,7 @@ func main() {
 	// Router
 	r := chi.NewRouter()
 	apiVersion := "/api/v1/llm"
+	r.Use(middleware.AuthMiddleware)
 
 	r.Route(apiVersion+"/models", func(r chi.Router) {
 		// r.Use(middleware.Auth) // JWT middleware

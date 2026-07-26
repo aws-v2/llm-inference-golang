@@ -3,11 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"llm-inference-service/internal/middleware"
+	"llm-inference-service/internal/utils"
 	"llm-inference-service/internal/nats"
 	"llm-inference-service/pkg/models"
 )
@@ -31,28 +32,34 @@ func (h *InferenceHandler) Infer(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
 
-	// --- 1. Extract OwnerID from JWT ---
-	ownerID := middleware.GetOwnerID(r)
+		ownerID := r.Context().Value("userId").(string)
+	requestID := r.Context().Value("requestId").(string)
+
+
 	if ownerID == "" {
-		writeError(w, "unauthorized", http.StatusUnauthorized)
+		log.Printf("[Handler:Infer] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
+		utils.WriteJSONError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
 		return
 	}
 
 	// --- 2. Parse request body ---
 	var req models.InferenceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, "invalid JSON body", http.StatusBadRequest)
+		log.Printf("[Handler:Infer] Service call,  for requestID %s, with error %s", requestID, err.Error())
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("invalid JSON body"))
 		return
 	}
 
 	// --- 3. Validate input ---
 	if req.Prompt == "" {
-		writeError(w, "prompt is required", http.StatusBadRequest)
+		log.Printf("[Handler:Infer] Service call,  for requestID %s, with error %s", requestID, "prompt is required")
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("prompt is required"))
 		return
 	}
 
 	if req.ModelID == "" {
-		writeError(w, "model_id is required", http.StatusBadRequest)
+		log.Printf("[Handler:Infer] Service call,  for requestID %s, with error %s", requestID, "model_id is required")
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("model_id is required"))
 		return
 	}
 
@@ -70,14 +77,18 @@ func (h *InferenceHandler) Infer(w http.ResponseWriter, r *http.Request) {
 	// --- 6. NATS request ---
 	respBytes, err := h.requestWithContext(ctx, subject, req)
 	if err != nil {
-		writeError(w, err.Error(), http.StatusGatewayTimeout)
+		log.Printf("[Handler:Infer] Service call,  for requestID %s, with error %s", requestID, err.Error())
+		utils.WriteJSONError(w, http.StatusGatewayTimeout, fmt.Errorf("Gateway timeout"))
 		return
 	}
 
 	// --- 7. Response ---
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(respBytes)
+	var rawData interface{}
+	// attempt to parse the JSON bytes returned to map/struct so we can put it in Data
+	if err := json.Unmarshal(respBytes, &rawData); err != nil {
+		rawData = string(respBytes) // fallback
+	}
+	utils.WriteJSONSucces(w, http.StatusOK, "inference successful", rawData)
 }
 
 
@@ -104,13 +115,4 @@ func (h *InferenceHandler) requestWithContext(ctx context.Context, subject strin
 	case res := <-ch:
 		return res.data, res.err
 	}
-}
-
-func writeError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-
-	json.NewEncoder(w).Encode(errorResponse{
-		Error: msg,
-	})
 }

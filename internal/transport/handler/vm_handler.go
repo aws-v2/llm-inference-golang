@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"llm-inference-service/internal/sse"
+	"llm-inference-service/internal/utils"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -42,8 +43,11 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := chi.URLParam(r, "sessionID")
+	requestID := r.Context().Value("requestId").(string)
+	
 	if sessionID == "" {
-		http.Error(w, "missing sessionID", http.StatusBadRequest)
+		log.Printf("[Handler:StreamEvents] Service call,  for requestID %s, with error %s", requestID, "missing sessionID")
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("missing sessionID"))
 		return
 	}
 
@@ -69,6 +73,7 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[SSE] client connected for session %s", sessionID)
 
 	ch := h.hub.Register(sessionID)
+
 	defer h.hub.Unregister(sessionID)
 
 	ctx := r.Context()
@@ -87,6 +92,7 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 
 		case msg, open := <-ch:
+
 			if !open {
 				// Hub closed the channel (e.g. session ended).
 				fmt.Fprintf(w, "event: closed\ndata: {}\n\n")
@@ -94,6 +100,7 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Each message is already a JSON blob; wrap it in an SSE frame.
+			log.Printf("the raw data %v",msg)
 			fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
 			log.Printf("[SSE] Sent data to session %s: %s", sessionID, string(msg))
