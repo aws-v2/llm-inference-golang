@@ -1,14 +1,17 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
-	"llm-inference-service/internal/transport/middleware"
 	model "llm-inference-service/internal/models"
 	service "llm-inference-service/internal/services"
+	"llm-inference-service/internal/transport/middleware"
 	"llm-inference-service/internal/utils"
 
 	"github.com/go-chi/chi/v5"
@@ -17,9 +20,7 @@ import (
 
 type TrainingHandler struct {
 	service *service.TrainingService
-
 }
-
 
 func NewTrainingHandler(s *service.TrainingService) *TrainingHandler {
 	return &TrainingHandler{service: s}
@@ -29,7 +30,7 @@ func NewTrainingHandler(s *service.TrainingService) *TrainingHandler {
  * CREATE TRAINING JOB
  */
 func (h *TrainingHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value("requestId").(string)
+	requestID := middleware.GetRequestID(r)
 	ownerID := middleware.GetOwnerID(r)
 
 	sessionID := uuid.New().String()
@@ -60,7 +61,7 @@ func (h *TrainingHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value("requestId").(string)
+	requestID := middleware.GetRequestID(r)
 	ownerID := middleware.GetOwnerID(r)
 	if ownerID == "" {
 		log.Printf("[Handler:ExecuteNode] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
@@ -105,20 +106,14 @@ func (h *TrainingHandler) ExecuteNode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
-
-
-
-
-
-
-
-
-
-
+// CalculateSHA256Bytes calculates the SHA256 hash of the byte slice.
+func CalculateSHA256Bytes(data []byte) string {
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
 
 func (h *TrainingHandler) UploadScript(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value("requestId").(string)
+	requestID := middleware.GetRequestID(r)
 	ownerID := middleware.GetOwnerID(r)
 	if ownerID == "" {
 		log.Printf("[Handler:UploadScript] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
@@ -126,35 +121,26 @@ func (h *TrainingHandler) UploadScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobID    := chi.URLParam(r, "jobID")
-	nodeID   := r.FormValue("node_id")
+	jobID := chi.URLParam(r, "jobID")
+	nodeID := r.FormValue("node_id")
 	nodeType := r.FormValue("node_type")
-	routeTo  := r.FormValue("route_to")
+	routeTo := r.FormValue("route_to")
 
-	// ── Flow 1: name + s3 path typed manually ────────────────────────────
-	scriptName := r.FormValue("name")
-	scriptPath := r.FormValue("path")
-
-	if scriptName != "" && scriptPath != "" {
-		script := model.PipelineScript{
-			ID:      fmt.Sprintf("script-%s", uuid.New().String()[:8]),
-			Name:    scriptName,
-			Path:    scriptPath,
-			RouteTo: routeTo,
-		}
-		result, err := h.service.AddScriptByPath(ownerID, jobID, nodeID, script)
-		if err != nil {
-			log.Printf("[Handler:UploadScript] Service call,  for requestID %s, with error %s", requestID, err.Error())
-			utils.WriteJSONError(w, http.StatusInternalServerError, fmt.Errorf("Failed to add script"))
-			return
-		}
-		utils.WriteJSONSucces(w, http.StatusOK, "script added successfully", result)
-		return
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		utils.WriteJSONError(w, http.StatusBadRequest, err)
+	return
 	}
+	defer file.Close()
 
-
-		log.Printf("this seems to be a file upload moving on to the next thing ")
-	
+	data, err:= io.ReadAll(file)
+	checksum :=CalculateSHA256Bytes(data)
+	if err !=nil{
+		utils.WriteJSONError(w,http.StatusBadRequest, err)
+		return 
+	}
+ 
+	log.Printf("this seems to be a file upload moving on to the next thing ")
 
 	// ── Flow 2: file upload ───────────────────────────────────────────────
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -176,7 +162,7 @@ func (h *TrainingHandler) UploadScript(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/octet-stream"
 	}
 
-	resp, err := h.service.GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, header.Filename, contentType, routeTo, file)
+	resp, err := h.service.GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, header.Filename, contentType, routeTo, file, checksum)
 	if err != nil {
 		log.Printf("[Handler:UploadScript] Service call,  for requestID %s, with error %s", requestID, err.Error())
 		utils.WriteJSONError(w, http.StatusInternalServerError, fmt.Errorf("Failed to get upload URL"))
@@ -185,64 +171,50 @@ func (h *TrainingHandler) UploadScript(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteJSONSucces(w, http.StatusOK, "script upload URL generated", resp)
 }
-// type TrainingJobDto struct {
-//     ID          string         `json:"id"`
-//     OwnerID     string         `json:"owner_id"`
-//     Name        string         `json:"name"`
-//     Description string         `json:"description"`
-//     Nodes       []PipelineNode `json:"nodes"`
-//     Edges       []PipelineEdge `json:"edges"`
-//     Pipeline    []string       `json:"pipeline"`
-//     Status      string         `json:"status"`
-//     Progress    float64        `json:"progress"`
-//     CreatedAt   time.Time      `json:"created_at"`
-//     Tags        []string       `json:"tags"`
-//     SessionID   string         `json:"session_id"`
-// }
 func (h *TrainingHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
-    requestID := r.Context().Value("requestId").(string)
-    ownerID := middleware.GetOwnerID(r)
-    if ownerID == "" {
-        log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
-        utils.WriteJSONError(w, http.StatusUnauthorized, fmt.Errorf("Unauthorized"))
-        return
-    }
+	requestID := middleware.GetRequestID(r)
+	ownerID := middleware.GetOwnerID(r)
+	if ownerID == "" {
+		log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
+		utils.WriteJSONError(w, http.StatusUnauthorized, fmt.Errorf("Unauthorized"))
+		return
+	}
 
-    jobID := chi.URLParam(r, "jobID")
-    if jobID == "" {
-        log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, "Missing job ID")
-        utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("Missing job ID"))
-        return
-    }
+	jobID := chi.URLParam(r, "jobID")
+	if jobID == "" {
+		log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, "Missing job ID")
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("Missing job ID"))
+		return
+	}
 
-    var req model.TrainingJobDto
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, err.Error())
-        utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("Invalid body"))
-        return
-    }
+	var req model.TrainingJobDto
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, err.Error())
+		utils.WriteJSONError(w, http.StatusBadRequest, fmt.Errorf("Invalid body"))
+		return
+	}
 
-    // These override anything the client sends
-    req.ID      = jobID
-    req.OwnerID = ownerID
+	// These override anything the client sends
+	req.ID = jobID
+	req.OwnerID = ownerID
 
-    log.Printf("updating job id: %s owner: %s", req.ID, req.OwnerID)
+	log.Printf("updating job id: %s owner: %s", req.ID, req.OwnerID)
 
-    response, err := h.service.UpdateJob(req)
-    if err != nil {
-        log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, err.Error())
-        utils.WriteJSONError(w, http.StatusInternalServerError, fmt.Errorf("Failed to update job"))
-        return
-    }
+	response, err := h.service.UpdateJob(req)
+	if err != nil {
+		log.Printf("[Handler:UpdateJob] Service call,  for requestID %s, with error %s", requestID, err.Error())
+		utils.WriteJSONError(w, http.StatusInternalServerError, fmt.Errorf("Failed to update job"))
+		return
+	}
 
-    utils.WriteJSONSucces(w, http.StatusOK, "job updated successfully", response)
+	utils.WriteJSONSucces(w, http.StatusOK, "job updated successfully", response)
 }
 
 /**
  * GET ALL TRAINING JOBS
  */
 func (h *TrainingHandler) GetAllJobs(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value("requestId").(string)
+	requestID := middleware.GetRequestID(r)
 	ownerID := middleware.GetOwnerID(r)
 	if ownerID == "" {
 		log.Printf("[Handler:GetAllJobs] Service call,  for requestID %s, with error %s", requestID, "unauthorized")
@@ -261,7 +233,7 @@ func (h *TrainingHandler) GetAllJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TrainingHandler) GetJobByID(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value("requestId").(string)
+	requestID := middleware.GetRequestID(r)
 	ownerID := middleware.GetOwnerID(r)
 	if ownerID == "" {
 		log.Printf("[Handler:GetJobByID] Service call,  for requestID %s, with error %s", requestID, "unauthorized")

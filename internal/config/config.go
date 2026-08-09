@@ -30,6 +30,7 @@ type DBConfig struct {
 	User     string
 	Password string
 	Name     string
+	SSLMode string
 }
 
 type EurekaConfig struct {
@@ -62,6 +63,7 @@ func Load() *Config {
 			User:     getEnv("DB_USER", "root"),
 			Password: getEnv("DB_PASSWORD", "root"),
 			Name:     getEnv("DB_NAME", "llm_db"),
+			SSLMode:     getEnv("DB_SSLMODE", "disable"),
 		},
 	}
 

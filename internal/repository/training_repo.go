@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	model "llm-inference-service/internal/models"
-	"log"
 	"time"
 )
 
@@ -245,6 +244,5 @@ func (r *PostgresRepository) GetAllByOwner(ownerID string) ([]model.TrainingJob,
 
 		jobs = append(jobs, j)
 	}
-log.Printf("the jobs are: %v", jobs)
 	return jobs, nil
 }

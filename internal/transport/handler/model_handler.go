@@ -103,6 +103,13 @@ func (h *ModelHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSONSucces(w, http.StatusOK, "config updated successfully", map[string]string{"id": modelID, "status": "updated"})
 }
 
+func (h *ModelHandler) Health(w http.ResponseWriter, r *http.Request) {
+	mapResponse :=make(map[string]string)
+	mapResponse["ping"] ="pong"
+	utils.WriteJSONSucces(w, http.StatusOK, "model registered successfully", mapResponse)
+
+
+}
 func (h *ModelHandler) RegisterModel(w http.ResponseWriter, r *http.Request) {
 	requestID := r.Context().Value("requestId").(string)
 	var req registerRequest

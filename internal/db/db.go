@@ -13,9 +13,10 @@ import (
 
 func NewPostgres(cfg config.DBConfig) *sql.DB {
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name,
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name,cfg.SSLMode,
 	)
+	logger.Info("Connected to PostgreSQL", "dsn", dsn)
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -26,6 +27,6 @@ func NewPostgres(cfg config.DBConfig) *sql.DB {
 		log.Fatal("DB ping failed:", err)
 	}
 
-	logger.Info("Connected to PostgreSQL")
+	logger.Info("Connected to PostgreSQL", "dsn", dsn)
 	return db
 }

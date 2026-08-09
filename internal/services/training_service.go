@@ -1,11 +1,8 @@
 package service
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	model "llm-inference-service/internal/models"
 	"llm-inference-service/internal/nats"
 	"llm-inference-service/internal/repository"
@@ -20,6 +17,7 @@ import (
 type TrainingService struct {
 	repo *repository.PostgresRepository
 	nc   *nats.Client
+	natsPrefix string
 }
 type AssetType string
 
@@ -62,17 +60,20 @@ type createPresignDownloadURLRequest struct {
 	CorrelationID string `json:"correlation_id"`
 	FileSha256    string `json:"sha256"`
 	AssetID       string `json:"asset_id"`
+	FileCount     int    `json:"file_count"`
 }
 type createPresignDownloadURLResponse struct {
 	URL      string `json:"url"`
 	BucketID string `json:"bucket_id"`
+	Sha256   string `json:"sha256"`
 
 	FileCount int `json:"file_count"` // zip or tar
 }
 
-func NewTrainingService(repo *repository.PostgresRepository, nc *nats.Client) *TrainingService {
+func NewTrainingService(repo *repository.PostgresRepository, nc *nats.Client, natsPrefix string) *TrainingService {
 	return &TrainingService{repo: repo,
 		nc: nc,
+		natsPrefix:natsPrefix ,
 	}
 }
 
@@ -226,13 +227,8 @@ func (s *TrainingService) UpdateJob(req model.TrainingJobDto) (model.TrainingJob
 	return s.repo.UpdateJob(req)
 }
 
-func sha256File(file multipart.File) (string, error) {
-	h := sha256.New()
-	if _, err := io.Copy(h, file); err != nil {
-		return "", fmt.Errorf("hash file: %w", err)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
+ 
+
 
 type createPresignedURLResponse struct {
 	UploadURL string `json:"upload_url"`
@@ -242,13 +238,13 @@ type ScriptUploadResponse struct {
 	Job       model.TrainingJob `json:"job"`
 }
 
-func (s *TrainingService) GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, filename, contentType, routeTo string, file multipart.File) (ScriptUploadResponse, error) {
+func (s *TrainingService) GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, filename, contentType, routeTo string, file multipart.File, checksum string ) (ScriptUploadResponse, error) {
 	job, err := s.repo.GetByID(jobID, ownerID)
 	if err != nil {
 		return ScriptUploadResponse{}, fmt.Errorf("job not found: %w", err)
 	}
 
-	checksum, err := sha256File(file)
+ 
 	if err != nil {
 		return ScriptUploadResponse{}, fmt.Errorf("hash file: %w", err)
 	}
@@ -319,32 +315,7 @@ func (s *TrainingService) GetScriptUploadURL(ownerID, jobID, nodeID, nodeType, f
 	}, nil
 }
 
-func (s *TrainingService) AddScriptByPath(ownerID, jobID, nodeID string, script model.PipelineScript) (model.TrainingJob, error) {
-	job, err := s.repo.GetByID(jobID, ownerID)
-	if err != nil {
-		return model.TrainingJob{}, fmt.Errorf("job not found: %w", err)
-	}
-
-	for i := range job.Nodes {
-		if job.Nodes[i].ID == nodeID {
-			job.Nodes[i].Scripts = append(job.Nodes[i].Scripts, script)
-			break
-		}
-	}
-
-	return s.repo.UpdateJob(model.TrainingJobDto{
-		ID:          job.ID,
-		OwnerID:     job.OwnerID,
-		Name:        job.Name,
-		Description: job.Description,
-		Nodes:       job.Nodes,
-		Edges:       job.Edges,
-		Pipeline:    job.Pipeline,
-		Tags:        job.Tags,
-		Status:      job.Status,
-		Progress:    job.Progress,
-	})
-}
+ 
 
 func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID string, sessionID string) (NodeExecutionResult, error) {
 	// 1. fetch the job to validate ownership + get node
@@ -404,7 +375,7 @@ func (s *TrainingService) ExecuteNode(ownerID, jobID, nodeID string, scriptID st
 		Status:     status,
 		StartedAt:  startedAt,
 		FinishedAt: &finishedAt,
-		SessionID:sessionID,
+		SessionID:  sessionID,
 		Error:      errMsg,
 	}, nil
 }
@@ -436,8 +407,11 @@ func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID str
 	req.FileSha256 = targetScript.FileSha256
 	req.UserID = job.OwnerID
 	req.CorrelationID = uuid.New().String()
+	req.FileCount = 1
 
-	respBytes, err := s.nc.Publisher.Request("s3.task.create_presign_download_url", req)
+	// uploadPresignUrl := fmt.Sprintf("%s.s3.task.create_presign_download_url", h.NatsPrefix)
+
+	respBytes, err := s.nc.Publisher.Request("s3.task.create_presign_download_url",  req)
 	if err != nil {
 		return fmt.Errorf("presign request failed: %w", err)
 	}
@@ -449,16 +423,43 @@ func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID str
 
 	log.Printf(">>>> PRESIGNED_DOWNLOAD_URLS: %+v )", presignResp)
 
+	assets := make(map[string]string)
+	assets["ASSET_URL"] = presignResp.URL
+	assets["ASSET_PATH"] = "/tmp"
+	assets["ASSET_SHA256"] = req.FileSha256
+
 	payload := EC2ProvisionRequest{
-		Profile:   "ai-worker",
-		Specs:     map[string]int{"cpu": 2, "ram": 4096},
-		SessionID: sessionID,
-		UserID:    job.OwnerID,
-		Manifest: AIManifest{
-			ProjID:    job.ID,
-			ProjName:  job.Name,
-			CreatedAt: job.CreatedAt,
+		UserID: req.UserID,
+
+		Profile:    "ai-worker",
+		SessionID:  sessionID,
+		Name:       job.Name + "-sg",
+		ResourceID: job.ID,
+		Specs: VMSpecs{
+			CPU:     2,
+			RAM:     1024,
+			Storage: 10,
 		},
+		Assets: []Asset{
+			{
+				Source:     AssetSourceObject,
+				Name:       node.Label + "scripts",
+				URL:        presignResp.URL,
+				SHA256:     req.FileSha256,
+				Executable: true,
+				Unpack:     false,
+				DestPath:   "/tmp/sg",
+				InlineData: "",
+			}, {
+				Source:     AssetSourceObject,
+				Name:       "serwin_sdk.py",
+				URL:        presignResp.URL,
+				SHA256:     req.FileSha256,
+				Executable: false,
+				Unpack:     false,
+				DestPath:   "/tmp/sg",
+				InlineData: "",
+			}},
 	}
 
 	ec2RespBytes, err := s.nc.Publisher.Request("ec2.task.provision", payload)
@@ -471,21 +472,56 @@ func (s *TrainingService) runSingleScript(node *model.PipelineNode, scriptID str
 
 }
 
-type AIManifest struct {
+type Manifest struct {
 	ID         string            `json:"id"           gorm:"primaryKey"`
 	ProjID     string            `json:"game_id"      gorm:"index"`
-	ProjName   string            `json:"name"`
+	Name       string            `json:"name"`
 	CreatedAt  time.Time         `json:"created_at"`
 	Parameters map[string]string `json:"parameters"`
 }
+
+//	type EC2ProvisionRequest struct {
+//		Profile    string            `json:"profile"`
+//		Specs      map[string]int    `json:"specs"`
+//		Parameters map[string]string `json:"parameters"`
+//		ResourceID    string            `json:"resource_id"`
+//		UserID     string            `json:"user_id"`
+//		StorageARN string            `json:"storage_arn"`
+//		Manifest   Manifest        `json:"manifest"`
+//		SessionID  string            `json:"session_id"`
+//	}
+type VMSpecs struct {
+	CPU     int `json:"cpu" binding:"required"`
+	RAM     int `json:"ram" binding:"required"` // MB
+	Storage int `json:"storage,omitempty"`      // GB, optional override of image default
+}
+type AssetSource string
+
+const (
+	AssetSourceObject AssetSource = "object" // single presigned file (e.g. lambda binary)
+	AssetSourceZip    AssetSource = "zip"    // presigned zip (folder/bucket export) — unpack after download
+	AssetSourceInline AssetSource = "inline" // small payload embedded directly, base64
+)
+
+type Asset struct {
+	Name       string      `json:"name"`
+	Source     AssetSource `json:"source"`
+	URL        string      `json:"url,omitempty"`
+	InlineData string      `json:"inline_data,omitempty"` // only for AssetSourceInline
+	DestPath   string      `json:"dest_path"`             // where the agent places/unpacks it
+	SHA256     string      `json:"sha256,omitempty"`
+	Unpack     bool        `json:"unpack,omitempty"`     // true = unzip after download
+	Executable bool        `json:"executable,omitempty"` // chmod +x after placing
+}
 type EC2ProvisionRequest struct {
-	Profile    string            `json:"profile"`
-	Specs      map[string]int    `json:"specs"`
-	Parameters map[string]string `json:"parameters"`
-	UserID     string            `json:"user_id"`
-	StorageARN string            `json:"storage_arn"`
-	Manifest   AIManifest        `json:"manifest"`
-	SessionID  string            `json:"session_id"`
+	UserID string `json:"userID"`
+	Profile    string          `json:"profile" binding:"required"`
+	Name       string          `json:"name" binding:"required"`
+	ResourceID string          `json:"resource_id"`
+	Specs      VMSpecs         `json:"specs" binding:"required"`
+	SessionID  string          `json:"session_id"`
+	Assets     []Asset         `json:"assets,omitempty"`
+	Config     json.RawMessage `json:"config,omitempty"` // profile-specific config, opaque to the core service
 }
 
 func (s *TrainingService) runAllNodeScripts(node *model.PipelineNode, job model.TrainingJob, sessionID string) error {
@@ -517,17 +553,46 @@ func (s *TrainingService) runAllNodeScripts(node *model.PipelineNode, job model.
 	}
 
 	log.Printf("[ArchiveByPrefix] Files returned: %d files, with this download url %s", presignResp.FileCount, presignResp.URL)
+	// weneedto getthe nodeindex,
+
+	assets := make(map[string]string)
+	assets["ASSET_URL"] = presignResp.URL
+	assets["ASSET_PATH"] = "/tmp/sg"
+	assets["ASSET_SHA256"] = presignResp.Sha256
 
 	payload := EC2ProvisionRequest{
-		Profile:   "ai-worker",
-		Specs:     map[string]int{"cpu": 2, "ram": 4096},
-		SessionID: sessionID,
-		UserID:    job.OwnerID,
-		// Manifest: AIManifest{
-		// 	ProjID:   job.ID,
-		// 	ProjName: job.Name,
-		// 	CreatedAt: job.CreatedAt,
-		// },
+		UserID: req.UserID,
+		Profile:    "ai-worker",
+		SessionID:  sessionID,
+		Name:       job.Name + "-sg",
+		ResourceID: job.ID,
+		Specs: VMSpecs{
+			CPU:     2,
+			RAM:     1024,
+			Storage: 10,
+		},
+		Assets: []Asset{
+			{
+				Source:     AssetSourceZip,
+				Name:       node.Label + "scripts",
+				URL:        presignResp.URL,
+				SHA256:     presignResp.Sha256,
+				Executable: true,
+				Unpack:     true,
+				DestPath:   "/tmp/sg",
+				InlineData: "",
+			},
+			{
+				Source:     AssetSourceObject,
+				Name:       "serwin_sdk.py",
+				URL:        presignResp.URL,
+				SHA256:     presignResp.Sha256,
+				Executable: false,
+				Unpack:     false,
+				DestPath:   "/tmp/sg",
+				InlineData: "",
+			},
+		},
 	}
 	// data, err := json.Marshal(payload)
 	// 	log.Printf("PROVISION_GAME_PAYLOAD_MARSHAL_FAILED %s", data.)

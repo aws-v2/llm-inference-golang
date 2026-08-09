@@ -11,6 +11,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"go.uber.org/zap"
 
 	// "go.uber.org/zap"
 
@@ -30,8 +31,8 @@ import (
 // runMigrations applies all pending up migrations from ./internal/migrations.
 func runMigrations(cfg config.DBConfig) {
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name,
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name, cfg.SSLMode,
 	)
 	m, err := migrate.New("file://./internal/migrations", dsn)
 	if err != nil {
@@ -42,8 +43,8 @@ func runMigrations(cfg config.DBConfig) {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Fatalf("migrate: up failed: %v", err)
 	}
-		logger.Info("Database migrations applied")
-	
+	logger.Info("Database migrations applied")
+
 }
 
 func main() {
@@ -51,7 +52,6 @@ func main() {
 
 	// Run DB migrations before opening connections
 	runMigrations(cfg.DB)
-
 	// DB
 	database := db.NewPostgres(cfg.DB)
 
@@ -63,23 +63,27 @@ func main() {
 		cfg.NatsPrefix,
 	)
 	if err != nil {
-		log.Fatalf("Failed to connect to NATS: %v", err)
-	}
-	defer nc.Conn.Close()
-		logger.Info("Connected to NATS")
+		logger.Warn("NATS not connected, pressing on without it", zap.Error(err))
+		nc = nil
 
-	// SSE hub — routes EC2 lifecycle events to browser clients.
-	sseHub := sse.NewHub()
-	if err := nc.Subscriber.SubscribeInstanceEvents(sseHub); err != nil {
-		log.Fatalf("Failed to subscribe to instance events: %v", err)
 	}
+	sseHub := sse.NewHub()
+
+	if nc != nil {
+		// SSE hub — routes EC2 lifecycle events to browser clients.
+		if err := nc.Subscriber.SubscribeInstanceEvents(sseHub); err != nil {
+			log.Fatalf("Failed to subscribe to instance events: %v", err)
+		}
+		defer nc.Conn.Close()
+	}
+	logger.Info("Connected to NATS")
 
 	// Model store (still in-memory for now)
 	modelStore := repository.NewPostgresModelRepository(database)
 	modelService := service.NewModelService(modelStore)
 
 	trainingRepo := repository.NewPostgresTrainingRepo(database)
-	trainingService := service.NewTrainingService(trainingRepo, nc)
+	trainingService := service.NewTrainingService(trainingRepo, nc, cfg.NatsPrefix)
 
 	docsService := service.NewDocsService(cfg.DocsPath)
 
@@ -96,6 +100,11 @@ func main() {
 	r := chi.NewRouter()
 	apiVersion := "/api/v1/llm"
 	r.Use(middleware.AuthMiddleware)
+
+	r.Route(apiVersion, func(r chi.Router) {
+		r.Get("/health", modelHandler.Health)
+
+	})
 
 	r.Route(apiVersion+"/models", func(r chi.Router) {
 		// r.Use(middleware.Auth) // JWT middleware
@@ -130,19 +139,16 @@ func main() {
 	r.Route(apiVersionDocs, func(r chi.Router) {
 
 		r.Get("/", docsHandlers.GetPublicManifest)
-		// r.Get("/internal/", docsHandlers.GetInternalManifest)
-
 		r.Get("/{slug}", docsHandlers.GetPublicDoc)
-		r.Get("/internal/{slug}", docsHandlers.GetInternalDoc)
 	})
 
 	// 1. Register with Eureka (with retries)
-	logger.Info("Attempting Eureka registration: "+cfg.Eureka.AppName)
+	logger.Info("Attempting Eureka registration: " + cfg.Eureka.AppName)
 
 	for i := 0; i < 3; i++ {
 		err := discovery.RegisterWithEureka(cfg.Eureka)
 		if err != nil {
-			logger.Warn("Eureka registration attempt failed attempt %d with error %v",i + 1,err.Error())
+			logger.Warn("Eureka registration attempt failed attempt %d with error %v", i+1, err.Error())
 
 			if i < 2 {
 				time.Sleep(5 * time.Second)
@@ -156,6 +162,8 @@ func main() {
 	// Start heartbeat
 	go discovery.SendHeartbeat(cfg.Eureka)
 
-	logger.Info("Server running on "+ cfg.ServerPort)
-	http.ListenAndServe(cfg.ServerPort, r)
+	logger.Info("Server running on " + cfg.ServerPort)
+	if err := http.ListenAndServe(cfg.ServerPort, r); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
 }

@@ -108,6 +108,30 @@ jobs:
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
             qarani/llm-gateway:staging-${{github.sha}}
+# APP_ENV=staging
+# APP_PROFILE=staging
+# SERVER_PORT=:8891
+# SERVICE_PORT=8891
+# SERVICE_NAME=llm-gateway
+# EUREKA_APP_NAME=llm-gateway
+# EUREKA_VIP_ADDRESS=llm-gateway
+# EUREKA_HOSTNAME=llm-gateway-staging
+# EUREKA_INSTANCE_ID=llm-gateway-staging:8891
+# EUREKA_IP_ADDR=llm-gateway-staging
+# EUREKA_SERVER_URL=https://discovery-server-staging.onrender.com/eureka
+# NATS_URL=nats://nats-staging:4222
+# NATS_USER=nats-staging-user
+# NATS_PASSWORD=nats-staging-password
+# NATS_PREFIX=staging.v1
+# DB_HOST=ep-purple-feather-aypga34j-pooler.c-5.us-east-2.aws.neon.tech
+# DB_PORT=5432
+# DB_USER=neondb_owner
+# DB_PASSWORD=npg_EHvDpaNKS73u
+# DB_NAME=llm_db
+# DOCS_PATH=/app/docs
+# AWS_REGION=eu-north-1
+# DB_SSLMODE=disable
+
 
   staging-open-pr-to-main:
     needs: staging-deploy

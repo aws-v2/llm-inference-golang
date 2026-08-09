@@ -35,10 +35,12 @@ func (p *Publisher) Request(subject string, payload interface{}) ([]byte, error)
 	log.Println("Full payload:", string(data))
 
 
-	msg, err := p.conn.Request(fullSubject, data, 30*time.Second)
+	msg, err := p.conn.Request( fullSubject, data, time.Second*30)
 	if err != nil {
+		fmt.Printf("\nthe error in [.conn] %v",err)
 		return nil, err
 	}
+		fmt.Printf("\nconn passed here")
 
 	return msg.Data, nil
 }
