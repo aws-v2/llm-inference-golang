@@ -24,6 +24,7 @@ import (
 	"llm-inference-service/internal/sse"
 	handler "llm-inference-service/internal/transport/handler"
 	"llm-inference-service/internal/transport/middleware"
+	ws "llm-inference-service/internal/transport/ws"
 	"llm-inference-service/pkg/logger"
 	// "llm-inference-service/pkg/logger"
 )
@@ -83,9 +84,17 @@ func main() {
 	modelService := service.NewModelService(modelStore)
 
 	trainingRepo := repository.NewPostgresTrainingRepo(database)
-	trainingService := service.NewTrainingService(trainingRepo, nc, cfg.NatsPrefix)
+	trainingService := service.NewTrainingService(trainingRepo, nc, cfg.NatsPrefix, cfg.ControlPlane)
+
+
+
+	// WebSocket manager and handlers (additive feature)
+	wsManager := ws.NewManager()
+	wsHandler := ws.NewHandler(wsManager)
+
 
 	docsService := service.NewDocsService(cfg.DocsPath)
+	orchestrator := service.NewOrchestratorService(trainingRepo, modelStore, nc, cfg.NatsPrefix, cfg.ControlPlane, cfg.MaxPipelines,wsManager)
 
 	// Workers
 
@@ -98,46 +107,53 @@ func main() {
 
 	// Router
 	r := chi.NewRouter()
+
+
+
 	apiVersion := "/api/v1/llm"
 	r.Use(middleware.AuthMiddleware)
 
-	r.Route(apiVersion, func(r chi.Router) {
-		r.Get("/health", modelHandler.Health)
-
+	// Health
+	r.Route(apiVersion+"/health", func(r chi.Router) {
+		r.Get("/", modelHandler.Health)
 	})
 
+	// Websockets
+	r.Route(apiVersion+"/ws", func(r chi.Router) {
+		r.Get("/stream-events/{run_id}", wsHandler.VMEvents)
+		r.Get("/runs/{run_id}", wsHandler.FrontendWS)
+	})
+
+	// Models
 	r.Route(apiVersion+"/models", func(r chi.Router) {
-		// r.Use(middleware.Auth) // JWT middleware
+		r.Get("/", modelHandler.GetMyModels) // ✅ all models for user
 		r.Post("/register", modelHandler.RegisterModel)
-
 		r.Post("/infer", inferenceHandler.Infer)
-
-		r.Get("/", modelHandler.GetMyModels)              // ✅ all models for user
 		r.Get("/{modelID}", modelHandler.GetModelDetails) // ✅ single model
-
-		r.Put("/{modelID}/config", modelHandler.UpdateConfig) // ✅ update config
 	})
-
+	// Training
 	r.Route(apiVersion+"/training", func(r chi.Router) {
 		r.Post("/jobs", trainingHandler.CreateJob)
 		r.Get("/jobs", trainingHandler.GetAllJobs)
-		r.Post("/jobs/{jobID}/nodes/{nodeID}/execute", trainingHandler.ExecuteNode)
 		r.Put("/jobs/{jobID}", trainingHandler.UpdateJob)
-		r.Post("/jobs/{jobID}/scripts/upload", trainingHandler.UploadScript)
+		r.Delete("/jobs/{jobID}", trainingHandler.DeleteJob)
+		// new routes
 		r.Get("/jobs/{jobID}", trainingHandler.GetJobByID)
+		r.Get("/jobs/{jobID}/run", trainingHandler.RunJobByID)
 		r.Post("/jobs/{jobID}/deploy", modelHandler.DeployModel)
+		r.Post("/jobs/{jobID}/add-file", trainingHandler.AddFile)
+		r.Post("/jobs/{jobID}/add-file-record", trainingHandler.AddFileRecord)
+		r.Get("/jobs/{fileID}/remove-file/{jobID}", trainingHandler.RemoveFile)
 
 	})
 
-	r.Route("/api/v1/llm/vm", func(r chi.Router) {
+	r.Route(apiVersion+"/vm", func(r chi.Router) {
 		r.Get("/events/{sessionID}", vmHandler.StreamEvents)
+		r.Post("/report-status/{step}", trainingHandler.HandleVMReportStatus)
 		r.Options("/events/{sessionID}", vmHandler.StreamEvents)
 	})
 
-	apiVersionDocs := "/api/v1/llm/docs"
-
-	r.Route(apiVersionDocs, func(r chi.Router) {
-
+	r.Route(apiVersion+"/docs", func(r chi.Router) {
 		r.Get("/", docsHandlers.GetPublicManifest)
 		r.Get("/{slug}", docsHandlers.GetPublicDoc)
 	})
@@ -161,6 +177,7 @@ func main() {
 
 	// Start heartbeat
 	go discovery.SendHeartbeat(cfg.Eureka)
+	go orchestrator.Start()
 
 	logger.Info("Server running on " + cfg.ServerPort)
 	if err := http.ListenAndServe(cfg.ServerPort, r); err != nil {

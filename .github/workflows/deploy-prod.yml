@@ -102,6 +102,9 @@ jobs:
             --env PUBLIC_HOST_IP=192.168.1.7 \
             --env EUREKA_IP_ADDR=llm-gateway-prod \
             --env AWS_REGION=eu-north-1 \
+            --env CONTROL_PLANE=http://localhost:8080 \
+            --env MAX_PIPELINES=3 \
+
             qarani/llm-gateway:prod
 
 

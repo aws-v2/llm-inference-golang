@@ -107,6 +107,8 @@ jobs:
             -e DB_NAME=llm_db \
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
+            -e CONTROL_PLANE=http://localhost:8080 \
+            -e MAX_PIPELINES=3 \
             qarani/llm-gateway:staging-${{github.sha}}
 # APP_ENV=staging
 # APP_PROFILE=staging

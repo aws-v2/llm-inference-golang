@@ -3,12 +3,9 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	model "llm-inference-service/internal/models"
-	"time"
-
-	"github.com/google/uuid"
+	model "llm-inference-service/internal/domain/models"
 )
-
+ 
 type ModelRepository interface {
 	Save(m model.Model) error
 	Get(id string) (model.Model, error)
@@ -27,21 +24,17 @@ func NewPostgresModelRepository(db *sql.DB) *PostgresModelRepository {
 
 func (r *PostgresModelRepository) Save(m model.Model) error {
 	query := `
-		INSERT INTO models (
-			id, name, file_path, owner_id, status,
-			temperature, max_tokens, created_at
+		INSERT INTO models (id,owner_id, name,is_public ,sha256 ,created_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		VALUES ($1,$2,$3,$4,$5,$6)
 	`
 	_, err := r.db.Exec(
 		query,
 		m.ID,
-		m.Name,
-		m.FilePath,
 		m.OwnerID,
-		m.Status,
-		m.Temperature,
-		m.MaxTokens,
+		m.Name,
+		m.IsPublic,
+		m.Sha256,
 		m.CreatedAt,
 	)
 	return err
@@ -49,20 +42,17 @@ func (r *PostgresModelRepository) Save(m model.Model) error {
 
 func (r *PostgresModelRepository) Get(id string) (model.Model, error) {
 	query := `
-		SELECT id, name, file_path, owner_id, status,
-		       temperature, max_tokens, created_at
+		SELECT id,owner_id, name,is_public ,sha256 ,created_at
 		FROM models
 		WHERE id = $1
 	`
 	var m model.Model
 	err := r.db.QueryRow(query, id).Scan(
 		&m.ID,
-		&m.Name,
-		&m.FilePath,
 		&m.OwnerID,
-		&m.Status,
-		&m.Temperature,
-		&m.MaxTokens,
+		&m.Name,
+		&m.IsPublic,
+		&m.Sha256,
 		&m.CreatedAt,
 	)
 	return m, err
@@ -70,10 +60,9 @@ func (r *PostgresModelRepository) Get(id string) (model.Model, error) {
 
 func (r *PostgresModelRepository) GetByOwner(ownerID string) ([]model.Model, error) {
 	query := `
-		SELECT id, name, file_path, owner_id, status,
-		       temperature, max_tokens, created_at
+		SELECT id,owner_id, name,is_public ,sha256 ,created_at
 		FROM models
-		WHERE owner_id = $1
+		WHERE owner_id = $1 or is_public=true
 		ORDER BY created_at DESC
 	`
 	rows, err := r.db.Query(query, ownerID)
@@ -87,12 +76,10 @@ func (r *PostgresModelRepository) GetByOwner(ownerID string) ([]model.Model, err
 		var m model.Model
 		if err := rows.Scan(
 			&m.ID,
-			&m.Name,
-			&m.FilePath,
 			&m.OwnerID,
-			&m.Status,
-			&m.Temperature,
-			&m.MaxTokens,
+			&m.Name,
+			&m.IsPublic,
+			&m.Sha256,
 			&m.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -112,9 +99,8 @@ func (r *PostgresModelRepository) UpdateStatus(id string, status model.Status) e
 	return err
 }
 
-
 func (r *PostgresModelRepository) DeployModel(modelID string, ownerID string) (model.Model, error) {
-
+ 
     // validate before touching the DB
     if modelID == "" {
         return model.Model{}, fmt.Errorf("modelID is required")
@@ -158,12 +144,7 @@ func (r *PostgresModelRepository) DeployModel(modelID string, ownerID string) (m
 
 	// 3. Create model from job
 	newModel := model.Model{
-		ID:         uuid.NewString(),
 		Name:       job.Name + "-deployed",
-		FilePath:   "job.",
-		OwnerID:    ownerID,
-		Status:     "Ready",
-		CreatedAt:  time.Now(),
 	}
 
 	queryModel := `
@@ -175,9 +156,7 @@ func (r *PostgresModelRepository) DeployModel(modelID string, ownerID string) (m
 		queryModel,
 		newModel.ID,
 		newModel.Name,
-		newModel.FilePath,
 		newModel.OwnerID,
-		newModel.Status,
 		newModel.CreatedAt,
 	)
 

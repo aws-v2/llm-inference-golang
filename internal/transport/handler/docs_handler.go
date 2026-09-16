@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	model "llm-inference-service/internal/domain/models"
 	service "llm-inference-service/internal/services"
 	"llm-inference-service/internal/utils"
 	"log"
@@ -36,7 +37,7 @@ func (h *DocsHandler) GetPublicManifest(w http.ResponseWriter, r *http.Request) 
 			"service":    data.Service,
 			"apiVersion": data.APIVersion,
 			"scope":      "public",
-			"internal":   []service.DocCategory{},
+			"internal":   []model.DocCategory{},
 			"public":     data.Public,
 		})
 		return
@@ -103,9 +104,9 @@ func (h *DocsHandler) GetPublicDoc(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helpers to safely extract fields when one of the manifests might be nil
-func safeCategories(m *service.DocManifest) []service.DocCategory {
+func safeCategories(m *model.DocManifest) []model.DocCategory {
 	if m == nil {
-		return []service.DocCategory{}
+		return []model.DocCategory{}
 	}
 	// prefer Public slice if present, otherwise Internal
 	if len(m.Public) > 0 {
@@ -114,10 +115,10 @@ func safeCategories(m *service.DocManifest) []service.DocCategory {
 	if len(m.Internal) > 0 {
 		return m.Internal
 	}
-	return []service.DocCategory{}
+	return []model.DocCategory{}
 }
 
-func chooseString(a, b *service.DocManifest) string {
+func chooseString(a, b *model.DocManifest) string {
 	if a != nil && a.Service != "" {
 		return a.Service
 	}
@@ -127,7 +128,7 @@ func chooseString(a, b *service.DocManifest) string {
 	return ""
 }
 
-func chooseVersion(a, b *service.DocManifest) string {
+func chooseVersion(a, b *model.DocManifest) string {
 	if a != nil && a.APIVersion != "" {
 		return a.APIVersion
 	}

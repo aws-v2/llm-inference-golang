@@ -43,7 +43,7 @@ func (h *VMHandler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := chi.URLParam(r, "sessionID")
-	requestID := r.Context().Value("requestId").(string)
+	requestID, _ := r.Context().Value("requestId").(string)
 	
 	if sessionID == "" {
 		log.Printf("[Handler:StreamEvents] Service call,  for requestID %s, with error %s", requestID, "missing sessionID")

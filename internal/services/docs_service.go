@@ -4,48 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	model "llm-inference-service/internal/domain/models"
 
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
 )
-
-// =====================
-// Models (match frontend)
-// =====================
-
-type DocItem struct {
-	Title string `json:"title"`
-	Slug  string `json:"slug"`
-}
-
-type DocCategory struct {
-	Title string    `json:"title"`
-	Items []DocItem `json:"items"`
-}
-
-type DocManifest struct {
-	Service    string        `json:"service"`
-	APIVersion string        `json:"apiVersion,omitempty"`
-	Scope      string        `json:"scope"`
-	Internal   []DocCategory `json:"internal,omitempty"`
-	Public     []DocCategory `json:"public,omitempty"`
-}
-
-type Metadata struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Icon        string   `json:"icon"`
-	LastUpdated string   `json:"lastUpdated"`
-	Tags        []string `json:"tags"`
-}
-
-type DocResponse struct {
-	Metadata Metadata `json:"metadata"`
-	Content  string   `json:"content"`
-}
 
 // =====================
 // Service
@@ -64,7 +29,7 @@ func NewDocsService(basePath string) *DocsService {
 // =====================
 
 // GetManifest loads manifest.json from public/internal folder
-func (s *DocsService) GetManifest(internal bool) (*DocManifest, error) {
+func (s *DocsService) GetManifest(internal bool) (*model.DocManifest, error) {
 	scope := s.getScope(internal)
 	path := filepath.Join(s.basePath, scope, "manifest.json")
 
@@ -83,14 +48,14 @@ func (s *DocsService) GetManifest(internal bool) (*DocManifest, error) {
 	var raw struct {
 		Service    string        `json:"service"`
 		Version    string        `json:"version"`
-		Categories []DocCategory `json:"categories"`
+		Categories []model.DocCategory `json:"categories"`
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("invalid manifest JSON at %q: %w", path, err)
 	}
 
-	manifest := &DocManifest{
+	manifest := &model.DocManifest{
 		Service:    raw.Service,
 		APIVersion: raw.Version,
 		Scope:      scope,
@@ -106,7 +71,7 @@ func (s *DocsService) GetManifest(internal bool) (*DocManifest, error) {
 }
 
 // GetDoc loads a markdown file and parses frontmatter
-func (s *DocsService) GetDoc(slug string, internal bool) (*DocResponse, error) {
+func (s *DocsService) GetDoc(slug string, internal bool) (*model.DocResponse, error) {
 	if !isValidSlug(slug) {
 		return nil, errors.New("invalid slug")
 	}
@@ -121,7 +86,7 @@ func (s *DocsService) GetDoc(slug string, internal bool) (*DocResponse, error) {
 
 	meta, content := parseMarkdownWithFrontmatter(string(data))
 
-	return &DocResponse{
+	return &model.DocResponse{
 		Metadata: meta,
 		Content:  content,
 	}, nil
@@ -153,8 +118,8 @@ func isValidSlug(slug string) bool {
 // Markdown Parser
 // =====================
 
-func parseMarkdownWithFrontmatter(input string) (Metadata, string) {
-	var meta Metadata
+func parseMarkdownWithFrontmatter(input string) (model.Metadata, string) {
+	var meta model.Metadata
 
 	parts := strings.SplitN(input, "---", 3)
 

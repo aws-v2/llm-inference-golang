@@ -18,10 +18,8 @@ CREATE TABLE models (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     owner_id UUID NOT NULL,
     name TEXT NOT NULL,
-    status TEXT NOT NULL,
-    file_path TEXT NOT NULL,
-    temperature FLOAT NOT NULL,
-    max_tokens INT NOT NULL,
+    is_public BOOLEAN NOT NULL default FALSE,
+    sha256 TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
     

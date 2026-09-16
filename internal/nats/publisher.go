@@ -45,6 +45,8 @@ func (p *Publisher) Request(subject string, payload interface{}) ([]byte, error)
 	return msg.Data, nil
 }
 
+
+
 // Fire-and-forget (for events like "model.registered")
 func (p *Publisher) Publish(subject string, payload interface{}) error {
 	data, err := json.Marshal(payload)

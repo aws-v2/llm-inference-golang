@@ -35,14 +35,14 @@ func (s *InMemoryStore) GetByOwner(ownerID string) []Model {
 }
 
 // UpdateStatus implements Repository.
-func (s *InMemoryStore) UpdateStatus(id string, status Status) {
-	m, ok := s.data[id]
-	if !ok {
-		return
-	}
-	m.Status = status
-	s.data[id] = m
-}
+// func (s *InMemoryStore) UpdateStatus(id string, status Status) {
+// 	m, ok := s.data[id]
+// 	if !ok {
+// 		return
+// 	}
+// 	m.Status = status
+// 	s.data[id] = m
+// }
 
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{

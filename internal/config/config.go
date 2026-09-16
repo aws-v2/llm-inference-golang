@@ -16,11 +16,13 @@ type Config struct {
 	NatsPassword string
 	NatsPrefix   string
 	DocsPath     string
+	MaxPipelines int
 
 	DB      DBConfig
 	Eureka  EurekaConfig
 	ServiceName string
 	Profile     string
+	ControlPlane string
 	Region      string
 }
 
@@ -49,7 +51,9 @@ func Load() *Config {
  
 
 	cfg := &Config{
+		ControlPlane: getEnv("CONTROL_PLANE", "http://10.250.37.253:8080"),
 		AppEnv:       getEnv("APP_ENV", "dev"),
+		MaxPipelines:       getEnvInt("MAX_PIPELINES", 10),
 		ServerPort:   getEnv("SERVER_PORT", ":8891"),
 		NatsURL:      getEnv("NATS_URL", "nats://localhost:4222"),
 		NatsUser:     getEnv("NATS_USER", "auth-server"),
