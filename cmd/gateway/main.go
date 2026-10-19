@@ -18,6 +18,7 @@ import (
 	"llm-inference-service/internal/config"
 	"llm-inference-service/internal/db"
 	discovery "llm-inference-service/internal/eureka"
+	"llm-inference-service/internal/metrics"
 	"llm-inference-service/internal/nats"
 	"llm-inference-service/internal/repository"
 	service "llm-inference-service/internal/services"
@@ -86,15 +87,12 @@ func main() {
 	trainingRepo := repository.NewPostgresTrainingRepo(database)
 	trainingService := service.NewTrainingService(trainingRepo, nc, cfg.NatsPrefix, cfg.ControlPlane)
 
-
-
 	// WebSocket manager and handlers (additive feature)
 	wsManager := ws.NewManager()
 	wsHandler := ws.NewHandler(wsManager)
 
-
 	docsService := service.NewDocsService(cfg.DocsPath)
-	orchestrator := service.NewOrchestratorService(trainingRepo, modelStore, nc, cfg.NatsPrefix, cfg.ControlPlane, cfg.MaxPipelines,wsManager)
+	orchestrator := service.NewOrchestratorService(trainingRepo, modelStore, nc, cfg.NatsPrefix, cfg.ControlPlane, cfg.MaxPipelines, wsManager)
 
 	// Workers
 
@@ -108,7 +106,7 @@ func main() {
 	// Router
 	r := chi.NewRouter()
 
-
+	metrics.Serve(":7091", cfg.METRICS_API_KEY)
 
 	apiVersion := "/api/v1/llm"
 	r.Use(middleware.AuthMiddleware)
