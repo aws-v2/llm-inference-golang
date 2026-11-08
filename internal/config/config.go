@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	AppEnv       string
+	LogFile string
 	ServerPort   string
 	NatsURL      string
 	NatsUser     string
@@ -60,6 +61,7 @@ func Load() *Config {
 	fmt.Printf("=====,%s", ip)
 
 	cfg := &Config{
+		LogFile:getEnv("LOG_FILE","/home/martin/Documents/aws-v4/dev/logs/llm-gateway.log"),
 		METRICS_API_KEY:"e956807e27669001319d73d3a9f1728a4a1161c79a6a287160c3a73394c05df8",
 		ControlPlane: getEnv("CONTROL_PLANE", fmt.Sprintf("http://%s:8080",ip)),
 		AppEnv:       getEnv("APP_ENV", "dev"),

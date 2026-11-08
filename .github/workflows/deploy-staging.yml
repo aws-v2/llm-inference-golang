@@ -56,7 +56,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: qarani/llm-gateway:staging-${{github.sha}}, qarani/llm-gateway:stagin
+        tags: qarani/llm-gateway:staging-${{github.sha}}, qarani/llm-gateway:staging
 
   staging-deploy:
     needs: staging-build-image
@@ -109,6 +109,7 @@ jobs:
             -e DOCS_PATH=/app/docs \
             -e AWS_REGION=eu-north-1 \
             -e CONTROL_PLANE=http://localhost:8080 \
+            -e LOG_FILE=/home/martin/Documents/aws-v4/dev/logs/llm-gateway.log \
             -e MAX_PIPELINES=3 \
             -e METRICS_API_KEY=e956807e27669001319d73d3a9f1728a4a1161c79a6a287160c3a73394c05df8 \
             qarani/llm-gateway:staging-${{github.sha}}
